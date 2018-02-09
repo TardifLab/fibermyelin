@@ -1,0 +1,11 @@
+
+Q0 see todo list for the code
+
+Q1 in multi-fiber voxels, is it better to threshold the AFDs or to include the fibers with lower AFD in the computation (removing parameters vs. including all sources of signal variation). If we sue a lower threshold, we should threshold afterward to analyze result
+
+Q2 can we do a smooth phase correction in order to complex average human data to reduce SNR and noise floor bias?
+
+Q3 can we incorporate a myelin estimate in NODDI to improve vic estimate?
+ 
+Q4 can we use CHARMED (have the data)? using vic assumes same intra:extra-axonal volume fraction for each fiber.  Could potentially fix the entire tensor for each fiber using CHARMED
+
