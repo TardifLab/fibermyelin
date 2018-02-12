@@ -69,11 +69,10 @@ parser = argparse.ArgumentParser(description='')
 
 parser.add_argument('-vis', dest='visualize', help='visualize previously computed fiber T1s', required=False, action='store_true')
 parser.add_argument('-t1', dest='t1_image_filename', help='T1 filename: output filename if doing full computation; pre-computed T1 filename if -vis option is selected', required=True, nargs=1)
-#parser.add_argument('-fixel', dest='fixel_dirname', help='fixel directory from mrtrix, must contain directions.mif, afd.mif, index.mif', required=True, nargs=1)                   
 parser.add_argument('-mask', dest='mask_image_filename', help='mask filename, for computation or visualization. If for visualization, must be the same mask previously used for computation', required=True, nargs=1)
 parser.add_argument('-vic', dest='vic_image_filename', help='vic filename, for computation only.', required=False, nargs=1)
-#not doing this here, assume user took care of it:
-#parser.add_argument('-fixel', dest='fixel_dirname', help='fixel directory from mrtrix, must contain directions.mif, afd.mif, index.mif', required=True, nargs=1)                   
+#not doing this here, assume user took care of it, then we input fixel2voxel-ed version:
+#parser.add_argument('-fixel', dest='fixel_dirname', help='fixel directory from mrtrix, must contain directions.mif, afd.mif, index.mif', required=True, nargs=1)              
 parser.add_argument('-afd', dest='afd_image_filename', help='AFD filename, currently required even for -vis', required=True, nargs=1)
 parser.add_argument('-afdthresh', dest='AFD_thresh', help='AFD threshold, required.  For -vis option, AFD threshold must be that used to compute the pre-computed T1 map', required=True, nargs=1)
 parser.add_argument('-dirs', dest='dirs_image_filename', help='directions filename, currently required even for -vis', required=True, nargs=1)
@@ -127,12 +126,11 @@ myargs = parser.parse_args()
 
 
 
-
-
 if myargs.visualize:
     T1_array=nib.load(myargs.t1_image_filename[0]).get_data()
 else:
     IR_diff_img=nib.load(myargs.IR_diff_image_filename[0])
+    vic_img=nib.load(myargs.vic_image_filename[0])
     
 #For both visualize and full computation:  
 AFD_img=nib.load(myargs.afd_image_filename[0])    
@@ -151,8 +149,6 @@ AFD_array=np.zeros(AFD_img.header.get_data_shape())
 fiber_dirs_array=np.zeros(fiber_dirs_img.header.get_data_shape())
 
 AFD_thresh=float(myargs.AFD_thresh[0])
-
-vic_img=nib.load(myargs.vic_image_filename[0])
 
     
 for j in range(len(voxels[0])):
