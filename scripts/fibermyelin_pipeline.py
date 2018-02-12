@@ -9,7 +9,7 @@ Created on Wed Oct  4 13:43:18 2017
 
 '''This is a pipeline to process IR-diffusion data'''
 
-#test
+
 
 #from pyminc.volumes.factory import *
 from fiberT1.FiberT1Solver import FiberT1Solver
@@ -25,7 +25,9 @@ import argparse
 #constants:
 EPSILON=9E-9
 
-#hardcoded stuff 
+#hardcoded stuff:
+
+#file orientation (if False, assumes axial)
 global sagittal 
 sagittal=True
 
@@ -49,6 +51,7 @@ NB: it assumes the following has already been done:\n\
 NB: vic is currently hardcoded to 0.4 (lower than healthy, but a better fit near the noise floor).\n\
     You must input vic file regardless:\n\
     just input your mask. Edit FiberT1Solver global var fix_vic to actually use vic.\n\
+NB: parallel diffusivity is currently output in file Dpar.nii\n\
 NB: there is currently a Johnson noise term added to all images: we need to think about this implementation.\n\
 NB: the data are assumed to have been acquired with diffusion fastest varying, and unshuffled to TI fastest varying.\n\
     i.e., bvals/bvecs have diffusion fastest varying, and input IRdiff images do not.\n\
