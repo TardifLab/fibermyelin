@@ -122,7 +122,7 @@ myargs = parser.parse_args()
 #for axial (the only place I have tested vic), I needed to set strides of the NODDI output to -1,2,3 
 
 
-#this code includes a bunch of tests, e.g. fixing Dpar, etc...
+
 
 
 if myargs.visualize:
