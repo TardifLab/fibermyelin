@@ -9,6 +9,8 @@ Created on Wed Oct  4 13:43:18 2017
 
 '''This is a pipeline to process IR-diffusion data'''
 
+
+
 #from pyminc.volumes.factory import *
 from fiberT1.FiberT1Solver import FiberT1Solver
 #import os
@@ -23,13 +25,22 @@ import argparse
 #constants:
 EPSILON=9E-9
 
-#defaults:
-global sagittal #must also be set in FiberT1Solver (DO: figure out how to share global vars)
-sagittal=False
+#hardcoded stuff:
 
-#hardcoded stuff 
+#file orientation (if False, assumes axial)
+global sagittal 
+sagittal=True
+
+#for visualization W/L:
+global vis_min
+vis_min=0
+global vis_range
+vis_range=2000
+
 #long TR: TRa not used:
 TR=8000
+
+#end hardcoded stuff
 
 print('This a script to process IR-diffusion data\n\
 NB: it does not currently handle data acquired with angulation\n\
@@ -40,6 +51,7 @@ NB: it assumes the following has already been done:\n\
 NB: vic is currently hardcoded to 0.4 (lower than healthy, but a better fit near the noise floor).\n\
     You must input vic file regardless:\n\
     just input your mask. Edit FiberT1Solver global var fix_vic to actually use vic.\n\
+NB: parallel diffusivity is currently output in file Dpar.nii\n\
 NB: there is currently a Johnson noise term added to all images: we need to think about this implementation.\n\
 NB: the data are assumed to have been acquired with diffusion fastest varying, and unshuffled to TI fastest varying.\n\
     i.e., bvals/bvecs have diffusion fastest varying, and input IRdiff images do not.\n\
@@ -104,29 +116,19 @@ myargs = parser.parse_args()
 #steps: ir-diff
 #make sure it came directly from dcm
 #axial:
-#need to mrconvert -stride 1,2,3,4 as well
-
+#need to mrconvert -stride 1,2,3,4 
+#
 #if sagittal, mrconvert -stride 3,1,2,4 
-#then, **flip in x, using fix_IRdiff_sag.py**
+#then, **flip in x, using fix_IRdiff_sag.py** OR just set strides to -3,1,2,4
 
-#if make mask in nifti, do same to mask as to files that match it; -stride 1,2,3 
+#do same to mask as to files that match it (first 3 dims)
 
 #same for vic 
-
-#crop if necessary (first test)
-#fslroi NODDI/FIT_ICVF.nii FIT_ICVF_crop.nii 0 128 0 128 20 18
-#*might* need to switch x: need to check.
+#for axial (the only place I have tested vic), I needed to set strides of the NODDI output to -1,2,3 
 
 
-#this code includes a bunch of tests, e.g. fixing Dpar, etc...
 
 
-#!!!!!!!!!!!!!!!special things that need to be changed for new data:
-
-#no vic:
-vic_img=nib.load(myargs.vic_image_filename[0])
-
-#end special things
 
 if myargs.visualize:
     T1_array=nib.load(myargs.t1_image_filename[0]).get_data()
@@ -151,7 +153,7 @@ fiber_dirs_array=np.zeros(fiber_dirs_img.header.get_data_shape())
 
 AFD_thresh=float(myargs.AFD_thresh[0])
 
-
+vic_img=nib.load(myargs.vic_image_filename[0])
 
     
 for j in range(len(voxels[0])):
@@ -266,7 +268,7 @@ if not myargs.visualize:
             
             #to test fixing D, we have to giev it the voxel coord
             
-            t1solver.SetInputData(fiber_dirs,AFD,IR_DWIs,TIs,grad_table,vic,TR,voxels[0][j],voxels[1][j],voxels[2][j])
+            t1solver.SetInputData(fiber_dirs,AFD,IR_DWIs,TIs,grad_table,vic,TR,voxels[0][j],voxels[1][j],voxels[2][j],sagittal)
             T1s=np.zeros(number_of_fibers)
             Dparfit=np.zeros(number_of_fibers)
             #T1sandDparfit=np.zeros([number_of_fibers,2])
@@ -342,8 +344,8 @@ for j in range(len(voxels[0])):
         thist1=float(T1_array[voxels[0][j],voxels[1][j],voxels[2][j],i])       
         
         _vectors.InsertTuple(counter,tuple(thisfiber)) 
-        #HERE manually playing with W/L   
-        _scalars.InsertNextValue((float(T1_array[voxels[0][j],voxels[1][j],voxels[2][j],i])-600)/250)
+          
+        _scalars.InsertNextValue((float(T1_array[voxels[0][j],voxels[1][j],voxels[2][j],i])-vis_min)/vis_range)
         #_scalars.InsertNextValue(thist1/1000)
         #to vis afd: don't scale:
         #_scalars.InsertNextValue(thist1)        
@@ -357,7 +359,7 @@ for j in range(len(voxels[0])):
         revfiber=-1.0*thisfiber                   
         _vectors.InsertTuple(counter,tuple(revfiber))
         #HERE manually playing with W/L     
-        _scalars.InsertNextValue((float(T1_array[voxels[0][j],voxels[1][j],voxels[2][j],i])-600)/250)
+        _scalars.InsertNextValue((float(T1_array[voxels[0][j],voxels[1][j],voxels[2][j],i])-vis_min)/vis_range)
         #_scalars.InsertNextValue(thist1/1000)
         #to vis afd: don't scale:
         #_scalars.InsertNextValue(thist1)

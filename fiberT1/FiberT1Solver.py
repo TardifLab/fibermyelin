@@ -13,11 +13,12 @@ import matplotlib.pyplot as plt
 from scipy import linalg
 import random
 
+#this code includes a bunch of tests, e.g. fixing Dpar, etc...
+#some of these tests are controlled by these global variables, others are buried deeper in the code.
+
 #hardcoded global vars:
 global plot_fit
 plot_fit=False
-global sagittal
-sagittal=False #must also be set in calling script
 global just_b0
 just_b0=False
 global fix_D_phantom3
@@ -192,7 +193,7 @@ class FiberT1Solver:
                 #we convert the axes here for non-transverse
                 #this doesn't handle any angulation!!!
                 #fiber directions are in world space, ==voxel space once we exchange the axes if no angulation
-                if (sagittal):
+                if (self.sagittal):                        
                     gtest=self.grad_table.bvecs[j,0:3] 
                     g=np.ones(3)
                     g[0]=gtest[1]
@@ -372,7 +373,7 @@ class FiberT1Solver:
         return res_lsq.x
         
     #DO: potentially just give inputs upon initialization, or will we reuse? give inputs to GetT1s?    
-    def SetInputData(self,fiber_dirs,AFDs,IR_DWIs,TIs,grad_table,vic,TR,vox0,vox1,vox2):
+    def SetInputData(self,fiber_dirs,AFDs,IR_DWIs,TIs,grad_table,vic,TR,vox0,vox1,vox2,sag):
         
         
                 
@@ -402,6 +403,8 @@ class FiberT1Solver:
         self.vox1=vox1
         self.vox2=vox2
         
+        
+        self.sagittal=sag
         #DO: assert size of IR_DWIs checks out
         
         #world space to voxel space transform is unity if aquired with no angulation and axial
