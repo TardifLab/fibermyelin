@@ -31,10 +31,14 @@ global sagittal
 sagittal=True
 
 #for visualization W/L:
+#asparagus 800,1500
+#human brain 300,900
 global vis_min
-vis_min=0
+vis_min=800#500
+global vis_max
+vis_max=1500#2250#700
 global vis_range
-vis_range=2000
+vis_range=vis_max-vis_min
 
 #long TR: TRa not used:
 TR=8000
@@ -283,7 +287,7 @@ if not myargs.visualize:
         #t1solver.VisualizeFibers()
     
     
-    #output the T1 map.  can visualize like an afd file with mrtrix
+    #output the T1 map.  can visualize like an afd file with mrtrix (DO: make sparse version, voxel2fixel)
     #start as a nonsparse copy of AFD file, DO: might want to create sparse file here
     T1_img = nib.Nifti1Image(T1_array, AFD_img.affine, AFD_img.header)
     nib.save(T1_img, myargs.t1_image_filename[0])
@@ -321,8 +325,9 @@ _points = vtk.vtkPoints()
 _scalars = vtk.vtkFloatArray()
 _vectors = vtk.vtkFloatArray()
 _lut = vtk.vtkLookupTable()
-_lut.SetRange(0.0, 1.0)
+#_lut.SetTableRange(vis_min, vis_max) #this isn't working
 _lut.Build()
+print _lut.GetRange()
 _vectors.SetNumberOfComponents(3) 
 
 counter=0
@@ -340,10 +345,10 @@ for j in range(len(voxels[0])):
         
         _vectors.InsertTuple(counter,tuple(thisfiber)) 
           
-        _scalars.InsertNextValue((float(T1_array[voxels[0][j],voxels[1][j],voxels[2][j],i])-vis_min)/vis_range)
-        #_scalars.InsertNextValue(thist1/1000)
-        #to vis afd: don't scale:
-        #_scalars.InsertNextValue(thist1)        
+        
+        #_scalars.InsertNextValue(thist1)
+        _scalars.InsertNextValue((thist1-vis_min)/vis_range)
+        
         counter+=1
         if sagittal:#for sagittal, 0 is y, 1 is z, and 2 is x:
             _points.InsertPoint(counter, (voxels[2][j],voxels[0][j],voxels[1][j])) 
@@ -353,11 +358,11 @@ for j in range(len(voxels[0])):
         #fiber pointing in other way, so centered:         
         revfiber=-1.0*thisfiber                   
         _vectors.InsertTuple(counter,tuple(revfiber))
-        #HERE manually playing with W/L     
-        _scalars.InsertNextValue((float(T1_array[voxels[0][j],voxels[1][j],voxels[2][j],i])-vis_min)/vis_range)
-        #_scalars.InsertNextValue(thist1/1000)
-        #to vis afd: don't scale:
+        
+        
         #_scalars.InsertNextValue(thist1)
+        _scalars.InsertNextValue((thist1-vis_min)/vis_range)
+        
         counter+=1
         
 
@@ -372,13 +377,15 @@ _hedgehog.SetInput(_polydata)
 
 
 #if you want tubes instead of lines:
-_tubefilter = vtk.vtkTubeFilter()
-_tubefilter.SetInput(_hedgehog.GetOutput())  
-_tubefilter.SetRadius(0.05)
-_mapper.SetInput(_tubefilter.GetOutput())
+#_tubefilter = vtk.vtkTubeFilter()
+#_tubefilter.SetInput(_hedgehog.GetOutput())  
+#_tubefilter.SetRadius(0.08)
+#_mapper.SetInput(_tubefilter.GetOutput())
 
-#if lines:
-#_mapper.SetInput(_hedgehog.GetOutput())
+#if just lines (preferred):
+_mapper.SetInput(_hedgehog.GetOutput())
+
+
 
 _mapper.ScalarVisibilityOn()
 _mapper.SetLookupTable(_lut)
@@ -387,6 +394,17 @@ _mapper.SetScalarModeToUsePointData()
 
 _actor = vtk.vtkActor()
 _actor.SetMapper(_mapper)
+_actor.GetProperty().SetLineWidth(10)
 _renderer.AddActor(_actor)
+
+#colourbar:
+_lut.SetHueRange(0.7,0.0)
+
+
+_colourbar = vtk.vtkScalarBarActor()
+_colourbar.SetLookupTable(_lut)
+_colourbar.SetNumberOfLabels(0)
+_renderer.AddActor2D(_colourbar)
+
 _renderer.Render()
 _renderwindowinteractor.Start()

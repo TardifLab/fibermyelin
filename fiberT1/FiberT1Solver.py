@@ -581,6 +581,7 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
                 
                 eq[h]+=term1*term2*term3
         else: #just_b0
+            
             i=0 #do just once for first fiber
             if (steady_state):
                 term2=1-2*np.exp(-args[h][4]/params[2*i])+np.exp(-args[h][2]/params[2*i])
