@@ -16,6 +16,7 @@ import random
 #this code includes a bunch of tests, e.g. fixing Dpar, etc...
 #some of these tests are controlled by these global variables, others are buried deeper in the code.
 
+
 #hardcoded global vars:
 global plot_fit
 plot_fit=False
@@ -56,32 +57,31 @@ class FiberT1Solver:
             self.lowerbounds[2*i+1]=0.1E-3#0#
             self.upperbounds[2*i+1]=5.0E-3#np.inf
         
-        
-        #additional Johnson noise term: 
-        
-        self.init_params[2*self.number_of_fibers]=0.0001 #neta for Johnson noise term. could constrain to something reasonable based on data    
-       
-        #TEST! not using it:
-        #self.lowerbounds[2*self.number_of_fibers]=0
-        #self.upperbounds[2*self.number_of_fibers]=9E-9
+     
         
         self.lowerbounds[2*self.number_of_fibers]=0 #we will square it, so reduce search
         self.upperbounds[2*self.number_of_fibers]=np.inf
         
+        
+        self.lowerbounds[2*self.number_of_fibers+1]=0
+        self.upperbounds[2*self.number_of_fibers+1]=np.inf
+     
         #unknown M0: this depends very much on the acquisition
         #use first signal point (first TI, b=0) and init T1, assume long TR
         self.init_params[2*self.number_of_fibers+1]=np.absolute(self.IR_DWIs[0]/(1-2*np.exp(-1.0*self.TIs[0]/700)))
-        #self.init_params[2*self.number_of_fibers+1]=400 
-        self.lowerbounds[2*self.number_of_fibers+1]=0
-        self.upperbounds[2*self.number_of_fibers+1]=np.inf
-        
+
+        #additional Johnson noise term:         
+        self.init_params[2*self.number_of_fibers]=0.0#0.0001*self.init_params[2*self.number_of_fibers+1] #neta for Johnson noise term. could constrain to something reasonable based on data    
+       
+     
         #we have number of TIs * number of bvalues observations, need to string them all out and add the constants to each observation
         #fastest varying will be diffusion, then TI
+        
         args=np.zeros((self.number_of_TIs*self.number_of_diff_encodes,6+6*self.number_of_fibers))        
         #args[:,0]=bvals        
         #args[:,1]=observations
         #args[:,2]=TR
-        #args[:,3]=not used right now
+        #args[:,3]=not used right now, could use for fixed neta input
         #args[:,4]=TIs
         #args[:,5]=number of fibers
         #args[:,6]=vic
@@ -101,14 +101,18 @@ class FiberT1Solver:
                 args[i*self.number_of_diff_encodes:(i+1)*self.number_of_diff_encodes,4]=np.ones(self.number_of_diff_encodes)*self.TIs[i] 
                 
         else:
+            
             for i in range(0,self.number_of_TIs):     
                 #bvals:
-                args[i*self.number_of_diff_encodes:(i+1)*self.number_of_diff_encodes,0]=self.grad_table.bvals[0:self.number_of_diff_encodes]
+                for j in range(0,self.number_of_diff_encodes):
+                    #bvals:
+                    args[i*self.number_of_diff_encodes+j,0]=self.grad_table.bvals[j]
                
-                #TIs:
-                args[i*self.number_of_diff_encodes:(i+1)*self.number_of_diff_encodes,4]=np.ones(self.number_of_diff_encodes)*self.TIs[i] 
-                #args[i*self.number_of_diff_encodes:(i+1)*self.number_of_diff_encodes,2]=np.ones(self.number_of_diff_encodes)*self.TRs[i] 
-        
+                    #TIs:
+                    args[i*self.number_of_diff_encodes+j,4]=self.TIs[i] 
+                    
+                    #could get TR history here too, when we need it for Bloch sim
+            
                 
         #constants self.number_of_fibers,self.AFDs,self.fiber_dirs:
         args[:,5]=self.number_of_fibers*np.ones(self.number_of_TIs*self.number_of_diff_encodes)
@@ -126,7 +130,7 @@ class FiberT1Solver:
                 if (self.IR_DWIs[i]<9E-9):
                     print "IR DWI image value 0"                    
                     return None
-                if (just_b0): # a bit of a hack, we will repeat:
+                if (just_b0): #we will repeat (not necessary but allows the rest of this code to be used):
                     args[j*self.number_of_diff_encodes+i,1]=self.IR_DWIs[j]
                     
                     
@@ -137,25 +141,26 @@ class FiberT1Solver:
 
 
         
-        #just using the nominal TR:
+        #just using the nominal TR for now:
         args[:,2]=self.TR*np.ones(self.number_of_TIs*self.number_of_diff_encodes)
 
         #create the g-vector for each fiber in coord system aligned along that fiber:        
         for k in range(0,self.number_of_fibers):  
-            
-            
-            fx=self.fiber_dirs[k][0]            
-            fy=self.fiber_dirs[k][1]            
-            fz=self.fiber_dirs[k][2]
+           
+            fx=self.fiber_dirs[k,0]            
+            fy=self.fiber_dirs[k,1]            
+            fz=self.fiber_dirs[k,2]
             
             
                             
-            v_orth1=GetOrthVector([fx, fy,fz])
+            v_orth1=GetOrthVector([fx, fy, fz])
             v_orth2=np.cross([fx, fy, fz],v_orth1)
             
             
+            
+            
                            
-            #transform g into coord system of (f,v_orth1,v_orth2):
+            #transformation into coord system of (f,v_orth1,v_orth2):
                         
             xfm_matrix=linalg.inv(np.array([[fx, fy, fz], v_orth1, v_orth2]))
             
@@ -196,9 +201,11 @@ class FiberT1Solver:
                 if (self.sagittal):                        
                     gtest=self.grad_table.bvecs[j,0:3] 
                     g=np.ones(3)
+                    
                     g[0]=gtest[1]
                     g[1]=gtest[2]
                     g[2]=gtest[0]
+                    
                 else:#axial
                     g=self.grad_table.bvecs[j,0:3] 
                 
@@ -226,9 +233,10 @@ class FiberT1Solver:
                         args[i*self.number_of_diff_encodes+j,9+6*k]=0.0
                         args[i*self.number_of_diff_encodes+j,10+6*k]=0.0
             
+                
+                
         
-        
-        #TEST: repeat the first point (b=0, first TI) N more times:        
+        #to weight b=0 more (instead of actualy acquiring more), repeat the first point (b=0, first TI) N more times:        
         if (True):
             N=np.int(0.1*self.number_of_TIs*self.number_of_diff_encodes)
             newargs=np.zeros((self.number_of_TIs*self.number_of_diff_encodes+N,6+6*self.number_of_fibers))
@@ -237,19 +245,7 @@ class FiberT1Solver:
             for i in range(self.number_of_TIs*self.number_of_diff_encodes,self.number_of_TIs*self.number_of_diff_encodes+N):
                 newargs[i,:]=args[0,:]      
             
-        #what about repeating all of the b=0s?
-        if (False):
-            numrep=10;
-            newargs=np.zeros(((self.number_of_TIs)*(self.number_of_diff_encodes+numrep),6+6*self.number_of_fibers))    
-            for i in range(self.number_of_TIs*self.number_of_diff_encodes):
-                newargs[i,:]=args[i,:]
-                
-            counter=0
-            for i in range(self.number_of_TIs*self.number_of_diff_encodes,self.number_of_TIs*(self.number_of_diff_encodes+numrep)):                       
-                newargs[i,:]=args[(counter%self.number_of_TIs)*self.number_of_diff_encodes,:]  
-                counter+=1
-                
-                
+              
                 
         if (simulate):#simulate data for these input fibers and AFDs: 
             #default params, except different T1s and no neta
@@ -266,12 +262,13 @@ class FiberT1Solver:
             #two channels:
             newargs[:,1]=np.sqrt(np.square(sim_data+[random.gauss(0,25) for i in range(len(sim_data))])+np.square([random.gauss(0,25) for i in range(len(sim_data))]))
                
-        #fit the equation: there are a lot of options here
+        #fit the equation: there are a lot of options here; user can modify this call
         #bounds could be implemented for 'lm'
         
             
         #trust region reflective:        
         #res_lsq = least_squares(IRDiffEqn, self.init_params, method='trf', bounds=tuple([self.lowerbounds,self.upperbounds]),args=args)
+        
         
         #trf, more b0s, 3-point jacobian computation:
         res_lsq = least_squares(IRDiffEqn, self.init_params, method='trf', bounds=tuple([self.lowerbounds,self.upperbounds]),args=newargs, jac='3-point')
@@ -412,102 +409,74 @@ class FiberT1Solver:
         #DO: check whether mrtrix outputs in voxel space or world space (could be either, but it is always xyz, even if sag acq)
         #its worldspace is the same as nii, which is not the same as dicom
     
-    def VisualizeFibers(self):
-        #make vtk objects of the fibers in the right orientation, cylinders
-        #color code by T1
-        #color code by AFD/(1/T1)? g-like (not linearly proportional.)
-    
-        #set up Display Window:
-        #DO: remove underscores: make these either of scoep just this function (then nothing), or this class (then self.)
-        _renderwindow = vtk.vtkRenderWindow()
-        _renderer = vtk.vtkRenderer()
-        _renderwindowinteractor = vtk.vtkRenderWindowInteractor()
-        _background_color = [1,1,1]        
-        _renderer.SetBackground(_background_color[0],_background_color[1], _background_color[2])
-        _renderwindow.AddRenderer(_renderer)
-        _renderwindowinteractor.SetRenderWindow(_renderwindow)
-        _renderwindowinteractor.Initialize()
-        _interactor_style_trackball = vtk.vtkInteractorStyleTrackballCamera()
-        _renderwindowinteractor.SetInteractorStyle(_interactor_style_trackball)
-        _mapper = vtk.vtkPolyDataMapper()
-        
-        #now create the vectors to display:
-        _polydata = vtk.vtkPolyData()
-        _hedgehog = vtk.vtkHedgeHog()
-        _points = vtk.vtkPoints()
-        _scalars = vtk.vtkFloatArray()
-        _vectors = vtk.vtkFloatArray()
-        _lut = vtk.vtkLookupTable()
-        _lut.SetRange(0.0, 1.0)
-        _lut.Build()
-        _vectors.SetNumberOfComponents(3) #DO: size of T1s/AFDs/fibers
-        
-        #for a test, one point, at origin.  eventually put multiple points at world space coordinates
-        #loop through number of fibers  
-        for i in range(0,self.number_of_fibers):
-            _points.InsertPoint(2*i, (0,0,0))             
-            _vectors.InsertTuple(2*i,tuple(self.fiber_dirs[i]))
-            _scalars.InsertNextValue(float(self.T1s[i])/1000)       
-            #other way, so centered: DO: -1*vector()
-            revfiber=[-1*self.fiber_dirs[i][0], -1*self.fiber_dirs[i][1], -1*self.fiber_dirs[i][2]]        
-            _points.InsertPoint(2*i+1, (0,0,0))        
-            _vectors.InsertTuple(2*i+1,tuple(revfiber))       
-            _scalars.InsertNextValue(float(self.T1s[i])/1000)
-        
-        
-        #DO: implement window/level interaction
-        
-        _polydata.SetPoints(_points)
-        _polydata.GetPointData().SetVectors(_vectors)
-        _polydata.GetPointData().SetScalars(_scalars)
-        
-        _hedgehog.SetInput(_polydata)
-        #hedgehog.SetScaleFactor(1)
-        
-        #DO: scale to fit world space voxel? this assumes isotropic, and fits voxel space voxel
-        
-        
-        _tubefilter = vtk.vtkTubeFilter()
-        _tubefilter.SetInput(_hedgehog.GetOutput())  
-        _tubefilter.SetRadius(0.04)
-        
-        _mapper.SetInput(_tubefilter.GetOutput())
-        _mapper.ScalarVisibilityOn()
-        _mapper.SetLookupTable(_lut)
-        _mapper.SetColorModeToMapScalars()
-        _mapper.SetScalarModeToUsePointData()
-        
-        _actor = vtk.vtkActor()
-        _actor.SetMapper(_mapper)
-        _renderer.AddActor(_actor)
-        _renderer.Render()
-        _renderwindowinteractor.Start()
-        
+
 
 
 def IRDiffEqn(params,*args): #equation for residuals; params is vector of the unknowns
  
+    #hardcodes:
+    steady_state=True #note this doesn't work for our purposes, if TR is short, because of shuffling. (and is not necessary, if TR is long)      
+    #vic set below if fix_vic flag is True    
+    
+    #notes:
+    #using vic assumes same tortuosity for all fibers. 
+    #DO: should add a term to tortuosity computation that is a factor of T1 (params) to incorp myelin
+              
     
     if (len(np.shape(args)) != 2):
         args=args[0][:][:]
+    
  
-    #DO: transfer params args into reasonably named variables for readability
-    steady_state=True #note this doesn't work for our purposes, if TR is short (and is not necessary, if TR is long)      
+    
     number_of_obs=np.shape(args)[0]
+    
+    #put args in reasonably named variables
+    #this takes longer but is more readable
+    #I'm having trouble extracting the right thing from args, so I'm doing a hack:
+    bvals=np.zeros(number_of_obs)
+    obs=np.zeros(number_of_obs)
+    TIs=np.zeros(number_of_obs)
+    
+    temp_array=args[0]
+    TR=temp_array[2]#currently a constant; we don't have a sequence with a different but constant TR per slice. Need Bloch sim if it varies.   
+    numfibers=int(temp_array[5]) #repeated constant
+    vic=temp_array[6] #repeated constant, hardcoded below if fix_vic flag is True 
+    AFD=np.zeros(numfibers)
+    for j in range(0,numfibers):
+        AFD[j]=temp_array[7+6*j]
+    
+    gnewx=np.zeros([number_of_obs,numfibers])
+    gnewy=np.zeros([number_of_obs,numfibers])
+    gnewz=np.zeros([number_of_obs,numfibers])
+    
+    
+    for i in range(0,number_of_obs):
+        temp_array=args[i]
+        bvals[i]=temp_array[0]
+        obs[i]=temp_array[1]
+        TIs[i]=temp_array[4]
+        for j in range(0,numfibers):
+            gnewx[i,j]=temp_array[8+6*j]
+            gnewy[i,j]=temp_array[9+6*j]
+            gnewz[i,j]=temp_array[10+6*j]
+            
+    
+    
+    
+    if (fix_vic):
+        vic=0.4
+   
+    
     eq=np.zeros(number_of_obs)
     sig=np.zeros(number_of_obs)
     out=np.zeros(number_of_obs)
+    
     #normalize the AFD:
-    sum_AFD=0       
-    numfibers=int(args[0][5]) 
-    
-    vic=args[0][6] # currently gets hardcoded below
+         
     norm_AFD=np.zeros(numfibers)
-    
-    for i in range(0,numfibers):
-        sum_AFD+=args[0][7+6*i]
+    sum_AFD=np.sum(AFD)
     for i in range(0,numfibers):    
-        norm_AFD[i]=args[0][7+6*i]/sum_AFD
+        norm_AFD[i]=AFD[i]/sum_AFD
         
     
     for h in range(0,number_of_obs):  
@@ -515,47 +484,31 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
             for i in range(0,numfibers):             
                 term1=norm_AFD[i]
                 
+                #params[2*i] is T1 for fiber i
                 if (steady_state):
-                    term2=1-2*np.exp(-args[h][4]/params[2*i])+np.exp(-args[h][2]/params[2*i])
+                    
+                    term2=1-2*np.exp(-TIs[h]/params[2*i])+np.exp(-TR/params[2*i])
                 else:
-                    term2=1-2*np.exp(-args[h][4]/params[2*i])
+                    term2=1-2*np.exp(-TIs[h]/params[2*i])
                                       
-                #TEST! 
-                if (False):                     
-                    if (i==0):
-                        term2=1-2*np.exp(-args[h][4]/643)                      
-                    if (i==1):
-                        term2=1-2*np.exp(-args[h][4]/718)   
                 
-                #using vic assumes same tortuosity for all fibers. 
-                #DO: should add a term that is a factor of T1 (params) to incorp myelin
                 
                 
                 
                 
                 if (not fix_D_phantom3):
-                    #dummy vic for now, DO: remove when really input vic from NODDI 
-                    if (fix_vic):
-                        vic=0.4
-                    else:
-                        vic=args[h][6]
-                    #using vic assumes same tortuosity for all fibers. 
-                    #averages the intra- (0) and extra-axonal tensors to get Dperp                 
-                    Dperp_factor=(1-vic)**2 #squared because we also do weighted average with ic (Dperp==0) compartment                
+                   
+                    #params[2*i+1] is Dpar
                     Dpar=params[2*i+1]
-                    
-                    #TEST!!!                    
-                    if (False):
-                        #Dpar=1.5E-3 
-                        if (i==0):
-                            Dpar=0.0012
-                        if (i==1):
-                            Dpar=0.0012
-                    
+                    #averages the intra- (0) and exa-axonal tensors to get Dperp                 
+                    Dperp_factor=(1-vic)**2 #squared because we also do weighted average with ic (Dperp==0) compartment                
+                 
+                
                     Dperp=Dperp_factor*Dpar 
                 elif (fix_D_phantom3):                     
-                    Dpar=args[h][11+6*i] 
-                    Dperp=args[h][12+6*i] 
+                    Dpar=args[h,11+6*i] 
+                    Dperp=args[h,12+6*i] 
+                    
                       
                 D=np.zeros([3,3])
                 
@@ -566,17 +519,19 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
                                                
                 D=np.array([[Dpar, 0, 0],[0, Dperp, 0],[0, 0, Dperp]])
                             
+                #g in coordinate system of fiber i:
                 
-                gnew=[args[h][8+6*i], args[h][9+6*i], args[h][10+6*i]]
+                gnew=[gnewx[h,i], gnewy[h,i], gnewz[h,i]]
+                
                 #DO as numpy matrix dot product  (note not matrix mult)
                 Dterm=0.0
                 for j in range(0,3):
                     for k in range (0,3):
-                        Dterm+=D[j][k]*gnew[j]*gnew[k]
+                        Dterm+=D[j,k]*gnew[j]*gnew[k]
                         
                 #print("Dterm %f" % Dterm)                  
                           
-                term3=np.exp(-args[h][0]*Dterm)
+                term3=np.exp(-bvals[h]*Dterm)
                 #print("term1 %f term2 %f term3 %f" % (term1, term2, term3))
                 
                 eq[h]+=term1*term2*term3
@@ -584,23 +539,31 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
             
             i=0 #do just once for first fiber
             if (steady_state):
-                term2=1-2*np.exp(-args[h][4]/params[2*i])+np.exp(-args[h][2]/params[2*i])
+                term2=1-2*np.exp(-TIs[h]/params[2*i])+np.exp(-TR/params[2*i])
             else:
-                term2=1-2*np.exp(-args[h][4]/params[2*i])
+                term2=1-2*np.exp(-TIs[h]/params[2*i])
             eq[h]+=term2                          
         
-        #take magnitude, mult by M0, and for low SNR images (currently b>300 or signal<100), add a Johnson noise term:        
+        
+        #take magnitude, mult by M0, and for low SNR images (currently b>300 or signal<100), add Johnson noise term neta:        
+        #params[2*numfibers+1] is M0
+        #params[2*numfibers] is noise term neta
+        
         #DO: implement a smart way of determining which TIs we need this for        
-        #if (args[h][0]>300):
-        #if (args[h][1]<100):
+        #if (args[h][0]>300): high b values
+        #if (args[h][1]<100): low signal
+        
+        #for now, set one of these to True:
         if (True): #noise term for ALL images
-        #if (False): #no noise term
-            sig[h]=params[2*numfibers+1]*sqrt(eq[h]**2+params[2*numfibers]**2)         
-        else:#no noise term
+        
+            sig[h]=sqrt((params[2*numfibers+1]*eq[h])**2+params[2*numfibers]**2)         
+        elif(False):#no noise term
             sig[h]=params[2*numfibers+1]*sqrt(eq[h]**2) 
+        #HEREelse:#constant noise term, hardcoded here
+            #neta=
+            #sig[h]=sqrt((params[2*numfibers+1]*eq[h])**2+neta**2)
         
-        
-        out[h]=sig[h]-args[h][1]  
+        out[h]=sig[h]-obs[h]  
         
     #if (numfibers>1):
         #print("Dpar: %f %f; T1: %f %f; SOS residuals: %f" % (params[1], params[3], params[0], params[2], np.sum(np.square(out))))
@@ -619,9 +582,68 @@ def GetOrthVector(v):
         if  iszero(v[3]):
             raise ValueError('zero vector')
         else:
-            return [0,1,0]
+            return [0,1,0]    
     else:
         len=np.sqrt(v[1]**2+v[0]**2)
         return [-v[1]/len,v[0]/len,0]
     
 
+
+def VisualizeDirs(dirs): #dirs is 1D, 3*number of dirs, xyz fastest varying
+    
+
+    #set up Display Window:
+    #DO: remove underscores: make these either of scoep just this function (then nothing), or this class (then self.)
+    _renderwindow = vtk.vtkRenderWindow()
+    _renderer = vtk.vtkRenderer()
+    _renderwindowinteractor = vtk.vtkRenderWindowInteractor()
+    _background_color = [1,1,1]        
+    _renderer.SetBackground(_background_color[0],_background_color[1], _background_color[2])
+    _renderwindow.AddRenderer(_renderer)
+    _renderwindowinteractor.SetRenderWindow(_renderwindow)
+    _renderwindowinteractor.Initialize()
+    _interactor_style_trackball = vtk.vtkInteractorStyleTrackballCamera()
+    _renderwindowinteractor.SetInteractorStyle(_interactor_style_trackball)
+    _mapper = vtk.vtkPolyDataMapper()
+    
+    #now create the vectors to display:
+    _polydata = vtk.vtkPolyData()
+    _hedgehog = vtk.vtkHedgeHog()
+    _points = vtk.vtkPoints()
+    _scalars = vtk.vtkFloatArray()
+    _vectors = vtk.vtkFloatArray()
+    _lut = vtk.vtkLookupTable()
+    _lut.SetRange(0.0, 1.0)
+    _lut.Build()
+    _vectors.SetNumberOfComponents(3) 
+    
+    #one point, at origin.  
+    #loop through number of dirs  
+    for i in range(0,len(dirs)/3):
+        _points.InsertPoint(i, (0,0,0))             
+        _vectors.InsertTuple(i,tuple([dirs[3*i], dirs[1+3*i], dirs[2+3*i]]))
+        _scalars.InsertNextValue(i)
+    
+    
+    _polydata.SetPoints(_points)
+    _polydata.GetPointData().SetVectors(_vectors)
+    _polydata.GetPointData().SetScalars(_scalars)
+    
+    _hedgehog.SetInput(_polydata)
+    #hedgehog.SetScaleFactor(1)
+    
+
+    
+    _mapper.SetInput(_hedgehog.GetOutput())
+    _mapper.ScalarVisibilityOn()
+    _mapper.SetLookupTable(_lut)
+    _mapper.SetColorModeToMapScalars()
+    _mapper.SetScalarModeToUsePointData()
+    
+    _actor = vtk.vtkActor()
+    _actor.SetMapper(_mapper)
+    _actor.GetProperty().SetLineWidth(6)
+    _renderer.AddActor(_actor)
+    _renderer.Render()
+    _renderwindowinteractor.Start()
+    
