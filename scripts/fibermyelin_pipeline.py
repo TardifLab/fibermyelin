@@ -51,15 +51,18 @@ NB: it assumes the following has already been done:\n\
     -registration of all images and sampling to same voxel space\n\
     -AFD computation with MRtrix\n\
     -optionally, tensor and/or NODDI fit\n\
-NB: vic is currently hardcoded to 0.4 (lower than healthy, but a better fit near the noise floor).\n\
+NB: vic is currently hardcoded to 0.4 (can change it to another constant or allow the vic to b input\n\
+    in FiberT1Solver function IRDiffEqn)\n\
+    0.4 is lower than healthy, but a better fit near the noise floor.\n\
     You must input vic file regardless:\n\
     just input your mask. Edit FiberT1Solver global var fix_vic to actually use vic.\n\
+NB: using vic (fixed or not) assumes the same tortuosity for all fibers; we are thinking about an alternative.\n\
 NB: parallel diffusivity is currently output in file Dpar.nii\n\
 NB: there is currently a Johnson noise term added to all images: we need to think about this implementation.\n\
 NB: the data are assumed to have been acquired with diffusion fastest varying, and unshuffled to TI fastest varying.\n\
     i.e., bvals/bvecs have diffusion fastest varying, and input IRdiff images do not.\n\
 NB: the visualization W/L is a WIP\n\
-    todo: "voxel2fixel" the T1 output to view it in mrview.\n\
+    todo: "voxel2fixel" the T1 output to view it in mrview - doesn\'t work, it writes the same value for each fiber\n\
 NB: initial parameter values are hardcoded in FiberT1Solver::GetT1s,\n\
     as is the fitting algorithm: currently trust region reflective (\'trf\').\n\
     Upper and lower bounds are also hardcoded\n\
@@ -294,6 +297,33 @@ if not myargs.visualize:
 
     Dparfit_img = nib.Nifti1Image(Dparfit_array, AFD_img.affine, AFD_img.header)
     nib.save(Dparfit_img, "Dpar.nii")
+    
+    
+    #output the T1s to match the directions initially input:
+    #the intent is to then use voxel2fixel, but it fails.  It writes the first T1 to all fixels.
+    T1_array_zeroed=np.zeros(AFD_img.header.get_data_shape())
+      
+    for j in range(len(voxels[0])):  
+        counter=0
+        for l in range(max_fibers): 
+                             
+            if AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]>AFD_thresh:            
+                T1_array_zeroed[voxels[0][j],voxels[1][j],voxels[2][j],l]=T1_array[voxels[0][j],voxels[1][j],voxels[2][j],counter]
+                counter+=1
+            else:
+                T1_array_zeroed[voxels[0][j],voxels[1][j],voxels[2][j],l]=0.0
+              
+                
+    T1_img_zeroed = nib.Nifti1Image(T1_array_zeroed, AFD_img.affine, AFD_img.header)
+    nib.save(T1_img_zeroed, "t1_zeroed.nii")   
+    
+#so, output the directions, t1, and index files in sparse format. we will make it be sparse, but for every voxel in original dataset
+#index is the size of AFD, first frame
+#we need to count through original directions file to find size of sparse directions and hence t1    
+
+#counter=0
+#for i in range(AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2])
+#this is unfinished        
     
 #Visualize: currently always done
 #the visualization is done in voxel space == world space for no angulation and isotropic steps and therefore only looks correct for isotropic voxels (and a right handed coordinate system, which nifti is.)
