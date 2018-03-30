@@ -22,13 +22,20 @@ global plot_fit
 plot_fit=False
 global just_b0
 just_b0=False
-global fix_D_phantom3
-fix_D_phantom3=False #if True, see below in code for hardcoded values for phantom3
-#should get rid of the above and just change params D to args D when we fix D
 global simulate
 simulate=False
-global fix_vic
-fix_vic=True
+
+#if True, see hardcoded vic value in IRDiffEq function.
+#currently 0.4: lower than healthy, but a better fit near the noise floor
+#I recommend actually computing it instead
+global fix_vic 
+fix_vic=False
+
+#this was a one-time experiment in rat spinal cord cuprizone phantom
+#if True, see below in code for hardcoded values for phantom3
+global fix_D_phantom3
+fix_D_phantom3=False 
+
 
 #import scipy
 #print(scipy.__version__)
@@ -46,9 +53,9 @@ class FiberT1Solver:
         
         
         #set initial estimates for the parameters:       
-        self.init_params=np.zeros(2*self.number_of_fibers+2) #T1 and Dpar for each fiber        
-        self.lowerbounds=np.zeros(2*self.number_of_fibers+2)
-        self.upperbounds=np.zeros(2*self.number_of_fibers+2)
+        self.init_params=np.zeros(2*self.number_of_fibers+1) #T1 and Dpar for each fiber, plus noise term neta        
+        self.lowerbounds=np.zeros(2*self.number_of_fibers+1)
+        self.upperbounds=np.zeros(2*self.number_of_fibers+1)
         for i in range(0,self.number_of_fibers):
             self.init_params[2*i]=700 #T1 in ms
             self.lowerbounds[2*i]=200#0
@@ -59,21 +66,23 @@ class FiberT1Solver:
         
      
         
-        self.lowerbounds[2*self.number_of_fibers]=0 #we will square it, so reduce search
-        self.upperbounds[2*self.number_of_fibers]=np.inf
-        
-        
-        self.lowerbounds[2*self.number_of_fibers+1]=0
-        self.upperbounds[2*self.number_of_fibers+1]=np.inf
      
         #unknown M0: this depends very much on the acquisition
         #use first signal point (first TI, b=0) and init T1, assume long TR
-        self.init_params[2*self.number_of_fibers+1]=np.absolute(self.IR_DWIs[0]/(1-2*np.exp(-1.0*self.TIs[0]/700)))
+        #just norm to first TI, b=0, and don't fit for this
+        #self.init_params[2*self.number_of_fibers+1]=np.absolute(self.IR_DWIs[0]/(1-2*np.exp(-1.0*self.TIs[0]/700)))
 
         #additional Johnson noise term:         
-        self.init_params[2*self.number_of_fibers]=0.0#0.0001*self.init_params[2*self.number_of_fibers+1] #neta for Johnson noise term. could constrain to something reasonable based on data    
-       
+        self.init_params[2*self.number_of_fibers]=0.0 #7.544243/(first im) is actual noise mean in asparagus phantom
      
+        #neta:
+        self.lowerbounds[2*self.number_of_fibers]=0 
+        self.upperbounds[2*self.number_of_fibers]=np.inf
+        
+        #Mo:
+        #self.lowerbounds[2*self.number_of_fibers+1]=0
+        #self.upperbounds[2*self.number_of_fibers+1]=np.inf
+        
         #we have number of TIs * number of bvalues observations, need to string them all out and add the constants to each observation
         #fastest varying will be diffusion, then TI
         
@@ -123,7 +132,7 @@ class FiberT1Solver:
         
         
         
-        #string out the observations with diffusion fastest varying
+        #string out the observations with diffusion fastest varying, norm to first image (TI1, b=0)
         counter=0
         for i in range(0,self.number_of_diff_encodes):             
             for j in range(0,self.number_of_TIs):                   
@@ -131,11 +140,11 @@ class FiberT1Solver:
                     print "IR DWI image value 0"                    
                     return None
                 if (just_b0): #we will repeat (not necessary but allows the rest of this code to be used):
-                    args[j*self.number_of_diff_encodes+i,1]=self.IR_DWIs[j]
+                    args[j*self.number_of_diff_encodes+i,1]=self.IR_DWIs[j]/self.IR_DWIs[0]
                     
                     
                 else:                   
-                    args[j*self.number_of_diff_encodes+i,1]=self.IR_DWIs[counter] 
+                    args[j*self.number_of_diff_encodes+i,1]=self.IR_DWIs[counter]/self.IR_DWIs[0] 
                     
                 counter+=1
 
@@ -236,31 +245,33 @@ class FiberT1Solver:
                 
                 
         
-        #to weight b=0 more (instead of actualy acquiring more), repeat the first point (b=0, first TI) N more times:        
+        #to weight b=0 more (instead of actually acquiring more), repeat N more times:        
         if (True):
-            N=np.int(0.1*self.number_of_TIs*self.number_of_diff_encodes)
-            newargs=np.zeros((self.number_of_TIs*self.number_of_diff_encodes+N,6+6*self.number_of_fibers))
+            N=np.int(0.1*(self.number_of_diff_encodes-1))-1
+            newargs=np.zeros((self.number_of_TIs*self.number_of_diff_encodes+self.number_of_TIs*N,6+6*self.number_of_fibers))
             for i in range(self.number_of_TIs*self.number_of_diff_encodes):
                 newargs[i,:]=args[i,:]
-            for i in range(self.number_of_TIs*self.number_of_diff_encodes,self.number_of_TIs*self.number_of_diff_encodes+N):
-                newargs[i,:]=args[0,:]      
+            for j in range(self.number_of_TIs):
+                for i in range(N):
+                
+                    newargs[self.number_of_TIs*self.number_of_diff_encodes+j*N+i,:]=args[j*self.number_of_TIs,:]      #the b=0 for that TI
             
               
                 
         if (simulate):#simulate data for these input fibers and AFDs: 
-            #default params, except different T1s and no neta
+            #default params, except potentially different T1s and no neta
             new_params=np.copy(self.init_params)
-            new_params[self.number_of_fibers]=0.0
-            new_params[0]=700             
-            if (self.number_of_fibers>1):
-                new_params[2]=700
-            print new_params    
-            sim_data=newargs[:,1]+IRDiffEqn(new_params,newargs)
+            new_params[self.number_of_fibers]=0.0 #neta
+            for i in range(self.number_of_fibers):
+                new_params[2*i]=700 #T1s
+            
+            noise_level=0    
+            sim_data=newargs[:,1]+IRDiffEqn(new_params,newargs) # this is the equation (sim) result
             random.seed()
             #real only:
             #newargs[:,1]=np.absolute(sim_data+[random.gauss(0,25) for i in range(len(sim_data))]) 
             #two channels:
-            newargs[:,1]=np.sqrt(np.square(sim_data+[random.gauss(0,25) for i in range(len(sim_data))])+np.square([random.gauss(0,25) for i in range(len(sim_data))]))
+            newargs[:,1]=np.sqrt(np.square(sim_data+[random.gauss(0,noise_level) for i in range(len(sim_data))])+np.square([random.gauss(0,noise_level) for i in range(len(sim_data))]))
                
         #fit the equation: there are a lot of options here; user can modify this call
         #bounds could be implemented for 'lm'
@@ -300,7 +311,7 @@ class FiberT1Solver:
             #everything, diffusion fastest varying:
             #ax.scatter(range(self.number_of_TIs*self.number_of_diff_encodes),args[:,1] , s=2, alpha=0.4)
             
-            #phantom3 and normal 30 dir acq
+            #normal 30 dir acq
             #just the b=0, z y x grad orientations             
             if (True):
                 
@@ -481,15 +492,20 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
     
     for h in range(0,number_of_obs):  
         if (not just_b0):
-            for i in range(0,numfibers):             
+            for i in range(0,numfibers):     
+                
+                #term0 is multiplicative term because we normalized to b=0, TI1
+                term0=1.0/(1-2*np.exp(-1.0*TIs[0]/params[2*i])+np.exp(-1.0*TR/params[2*i]))
+                
+                
                 term1=norm_AFD[i]
                 
                 #params[2*i] is T1 for fiber i
                 if (steady_state):
                     
-                    term2=1-2*np.exp(-TIs[h]/params[2*i])+np.exp(-TR/params[2*i])
+                    term2=1-2*np.exp(-1.0*TIs[h]/params[2*i])+np.exp(-1.0*TR/params[2*i])
                 else:
-                    term2=1-2*np.exp(-TIs[h]/params[2*i])
+                    term2=1-2*np.exp(-1.0*TIs[h]/params[2*i])
                                       
                 
                 
@@ -500,6 +516,8 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
                    
                     #params[2*i+1] is Dpar
                     Dpar=params[2*i+1]
+                    
+                    
                     #averages the intra- (0) and exa-axonal tensors to get Dperp                 
                     Dperp_factor=(1-vic)**2 #squared because we also do weighted average with ic (Dperp==0) compartment                
                  
@@ -518,6 +536,9 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
                                                
                                                
                 D=np.array([[Dpar, 0, 0],[0, Dperp, 0],[0, 0, Dperp]])
+                
+                
+                
                             
                 #g in coordinate system of fiber i:
                 
@@ -534,18 +555,20 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
                 term3=np.exp(-bvals[h]*Dterm)
                 #print("term1 %f term2 %f term3 %f" % (term1, term2, term3))
                 
-                eq[h]+=term1*term2*term3
+                eq[h]+=term0*term1*term2*term3
         else: #just_b0
             
             i=0 #do just once for first fiber
             if (steady_state):
-                term2=1-2*np.exp(-TIs[h]/params[2*i])+np.exp(-TR/params[2*i])
+                term2=1-2*np.exp(-1.0*TIs[h]/params[2*i])+np.exp(-1.0*TR/params[2*i])
             else:
-                term2=1-2*np.exp(-TIs[h]/params[2*i])
-            eq[h]+=term2                          
+                term2=1-2*np.exp(-1.0*TIs[h]/params[2*i])
+            eq[h]+=term0*term2                          
         
         
-        #take magnitude, mult by M0, and for low SNR images (currently b>300 or signal<100), add Johnson noise term neta:        
+        #take magnitude
+        
+        #for low SNR images (currently b>300 or signal<100), add Johnson noise term neta:        
         #params[2*numfibers+1] is M0
         #params[2*numfibers] is noise term neta
         
@@ -556,12 +579,13 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
         #for now, set one of these to True:
         if (True): #noise term for ALL images
         
-            sig[h]=sqrt((params[2*numfibers+1]*eq[h])**2+params[2*numfibers]**2)         
+            sig[h]=sqrt(eq[h]**2+params[2*numfibers]**2)         
         elif(False):#no noise term
-            sig[h]=params[2*numfibers+1]*sqrt(eq[h]**2) 
-        #HEREelse:#constant noise term, hardcoded here
-            #neta=
-            #sig[h]=sqrt((params[2*numfibers+1]*eq[h])**2+neta**2)
+            sig[h]=sqrt(eq[h]**2) 
+        else:#constant noise term, hardcoded here
+            
+            neta=7.544243 #asparagus
+            sig[h]=sqrt((params[2*numfibers+1]*eq[h])**2+neta**2)
         
         out[h]=sig[h]-obs[h]  
         
@@ -585,7 +609,7 @@ def GetOrthVector(v):
             return [0,1,0]    
     else:
         len=np.sqrt(v[1]**2+v[0]**2)
-        return [-v[1]/len,v[0]/len,0]
+        return [-1.0*v[1]/len,v[0]/len,0]
     
 
 
