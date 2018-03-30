@@ -12,7 +12,7 @@ Created on Wed Oct  4 13:43:18 2017
 
 #from pyminc.volumes.factory import *
 from fiberT1.FiberT1Solver import FiberT1Solver
-#import os
+import os
 import numpy as np
 import nibabel as nib
 from dipy.io import read_bvals_bvecs
@@ -30,13 +30,15 @@ EPSILON=9E-9
 global sagittal 
 sagittal=True
 
+global output_fixel
+output_fixel=False
 #for visualization W/L:
 #asparagus 800,1500
-#human brain 300,900
+#human brain 600,725
 global vis_min
-vis_min=800#500
+vis_min=500
 global vis_max
-vis_max=1500#2250#700
+vis_max=1500
 global vis_range
 vis_range=vis_max-vis_min
 
@@ -56,7 +58,7 @@ NB: vic is currently hardcoded to 0.4 (can change it to another constant or allo
     0.4 is lower than healthy, but a better fit near the noise floor.\n\
     You must input vic file regardless:\n\
     just input your mask. Edit FiberT1Solver global var fix_vic to actually use vic.\n\
-NB: using vic (fixed or not) assumes the same tortuosity for all fibers; we are thinking about an alternative.\n\
+NB: using vic assumes the same tortuosity for all fibers; we are thinking about an alternative.\n\
 NB: parallel diffusivity is currently output in file Dpar.nii\n\
 NB: there is currently a Johnson noise term added to all images: we need to think about this implementation.\n\
 NB: the data are assumed to have been acquired with diffusion fastest varying, and unshuffled to TI fastest varying.\n\
@@ -76,8 +78,10 @@ parser = argparse.ArgumentParser(description='')
 
 parser.add_argument('-vis', dest='visualize', help='visualize previously computed fiber T1s', required=False, action='store_true')
 parser.add_argument('-t1', dest='t1_image_filename', help='T1 filename: output filename if doing full computation; pre-computed T1 filename if -vis option is selected', required=True, nargs=1)
+parser.add_argument('-Dpar', dest='Dpar_image_filename', help='D_parallel filename', required=False, nargs=1)
 parser.add_argument('-mask', dest='mask_image_filename', help='mask filename, for computation or visualization. If for visualization, must be the same mask previously used for computation', required=True, nargs=1)
 parser.add_argument('-vic', dest='vic_image_filename', help='vic filename, for computation only.', required=False, nargs=1)
+parser.add_argument('-fixel',dest='output_fixel', help='output fixel format T1 in a directory called t1_fixel_dir; will overwrite anything that is there already, and is currently implemented only for axial images', required=False, action='store_true')
 #not doing this here, assume user took care of it, then we input fixel2voxel-ed version:
 #parser.add_argument('-fixel', dest='fixel_dirname', help='fixel directory from mrtrix, must contain directions.mif, afd.mif, index.mif', required=True, nargs=1)              
 parser.add_argument('-afd', dest='afd_image_filename', help='AFD filename, currently required even for -vis', required=True, nargs=1)
@@ -125,12 +129,13 @@ myargs = parser.parse_args()
 #
 #if sagittal, mrconvert -stride 3,1,2,4 
 #then, **flip in x, using fix_IRdiff_sag.py** OR just set strides to -3,1,2,4
+#I think this is because of something in Ilana's unshuffling script, and we could change that and not flip here 
 
 #do same to mask as to files that match it (first 3 dims)
 
 #same for vic 
-#for axial (the only place I have tested vic), I needed to set strides of the NODDI output to -1,2,3 
-
+#for axial, I needed to set strides of the NODDI output to 1,2,3 
+#for sagittal, 3,1,2
 
 
 if myargs.visualize:
@@ -164,7 +169,7 @@ for j in range(len(voxels[0])):
     number_of_fibers=0        
     for l in range(max_fibers):                  
         if AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]>AFD_thresh:            
-            AFD_array[voxels[0][j],voxels[1][j],voxels[2][j],number_of_fibers]=AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]
+            AFD_array[voxels[0][j],voxels[1][j],voxels[2][j],number_of_fibers]=AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]            
             fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*number_of_fibers]=fiber_dirs_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],3*l]
             fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*number_of_fibers+1]=fiber_dirs_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],3*l+1]
             fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*number_of_fibers+2]=fiber_dirs_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],3*l+2]
@@ -296,34 +301,90 @@ if not myargs.visualize:
     nib.save(T1_img, myargs.t1_image_filename[0])
 
     Dparfit_img = nib.Nifti1Image(Dparfit_array, AFD_img.affine, AFD_img.header)
-    nib.save(Dparfit_img, "Dpar.nii")
+    if (myargs.Dpar_image_filename is None):
+        nib.save(Dparfit_img, "Dpar.nii")
+    else:    
+        nib.save(Dparfit_img, myargs.Dpar_image_filename[0])
     
     
+        
+T1_array_zeroed=np.zeros(AFD_img.header.get_data_shape()) #HERE to vis currently doing this when vis, put in not vis loop once debugged
+  
+for j in range(len(voxels[0])):  
+    counter=0
+    for l in range(max_fibers): 
+                         
+        if AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]>AFD_thresh:            
+            T1_array_zeroed[voxels[0][j],voxels[1][j],voxels[2][j],l]=T1_array[voxels[0][j],voxels[1][j],voxels[2][j],counter]
+            counter+=1
+        else:
+            T1_array_zeroed[voxels[0][j],voxels[1][j],voxels[2][j],l]=0.0
+          
+if (False):   
     #output the T1s to match the directions initially input:
     #the intent is to then use voxel2fixel, but it fails.  It writes the first T1 to all fixels.
-    T1_array_zeroed=np.zeros(AFD_img.header.get_data_shape())
-      
-    for j in range(len(voxels[0])):  
-        counter=0
-        for l in range(max_fibers): 
-                             
-            if AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]>AFD_thresh:            
-                T1_array_zeroed[voxels[0][j],voxels[1][j],voxels[2][j],l]=T1_array[voxels[0][j],voxels[1][j],voxels[2][j],counter]
-                counter+=1
-            else:
-                T1_array_zeroed[voxels[0][j],voxels[1][j],voxels[2][j],l]=0.0
-              
-                
     T1_img_zeroed = nib.Nifti1Image(T1_array_zeroed, AFD_img.affine, AFD_img.header)
     nib.save(T1_img_zeroed, "t1_zeroed.nii")   
-    
-#so, output the directions, t1, and index files in sparse format. we will make it be sparse, but for every voxel in original dataset
-#index is the size of AFD, first frame
-#we need to count through original directions file to find size of sparse directions and hence t1    
+     
 
-#counter=0
-#for i in range(AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2])
-#this is unfinished        
+
+if (myargs.output_fixel): 
+   
+#output the directions, t1, and index files in sparse format. 
+#I'm doing this for the thresholded data
+#index is the size of AFD, first frame
+    
+     
+    new_size=[AFD_img.header.get_data_shape()[0],AFD_img.header.get_data_shape()[1], AFD_img.header.get_data_shape()[2],2]
+    
+    index_array=np.zeros(new_size)
+    
+    #temporarily make these as enormous as possible:
+    
+    
+    thresh_dirs_array=np.zeros([AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2],3,1])
+    
+    t1_fixel_array=np.zeros([AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2],1,1])
+    
+    counter=0
+    #for i in range(AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2])
+    for i in range(len(voxels[0])):#for just the mask
+        fibercounter=0
+        for l in range(max_fibers):   
+                        
+            if AFD_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],l]>AFD_thresh: 
+                if (index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]==0):#set on first fiber
+                    
+                    index_array[voxels[0][i],voxels[1][i],voxels[2][i],1]=counter
+                thresh_dirs_array[counter,0,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l]
+                thresh_dirs_array[counter,1,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+1]
+                thresh_dirs_array[counter,2,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+2]
+                t1_fixel_array[counter,0,0]=T1_array_zeroed[voxels[0][i],voxels[1][i],voxels[2][i],l]
+                
+                counter+=1
+                fibercounter+=1
+                index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]=fibercounter
+                
+         
+    if not os.path.exists("t1_fixel_dir"):
+        os.makedirs("t1_fixel_dir")
+               
+    index_img = nib.Nifti1Image(index_array, np.eye(4))
+    nib.save(index_img, "t1_fixel_dir/index.nii")
+    
+    
+    
+    thresh_dirs_img=nib.Nifti1Image(thresh_dirs_array[0:counter,0:3,0],np.eye(4))
+    nib.save(thresh_dirs_img, "t1_fixel_dir/directions.nii") 
+    
+    #DO: why on earth does this image end up size counterx3x1?? I am correcting it with fslroi
+    t1_fixel_img=nib.Nifti1Image(t1_fixel_array[0:counter,0,0], np.eye(4)) 
+    
+    nib.save(thresh_dirs_img, "t1_fixel_dir/t1_fixel.nii") 
+    mycommand="fslroi t1_fixel_dir/t1_fixel.nii t1_fixel_dir/t1_fixel_1.nii 0 %d 0 1 0 1" % counter 
+    
+    os.system(mycommand)
+    os.system("rm -f t1_fixel_dir/t1_fixel.nii")
     
 #Visualize: currently always done
 #the visualization is done in voxel space == world space for no angulation and isotropic steps and therefore only looks correct for isotropic voxels (and a right handed coordinate system, which nifti is.)
@@ -357,7 +418,7 @@ _vectors = vtk.vtkFloatArray()
 _lut = vtk.vtkLookupTable()
 #_lut.SetTableRange(vis_min, vis_max) #this isn't working
 _lut.Build()
-print _lut.GetRange()
+#print _lut.GetRange()
 _vectors.SetNumberOfComponents(3) 
 
 counter=0
