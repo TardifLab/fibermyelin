@@ -261,16 +261,17 @@ class FiberT1Solver:
         if (simulate):#simulate data for these input fibers and AFDs: 
             #default params, except potentially different T1s and no neta
             new_params=np.copy(self.init_params)
-            new_params[self.number_of_fibers]=0.0 #neta
-            for i in range(self.number_of_fibers):
-                new_params[2*i]=700 #T1s
+            #new_params[self.number_of_fibers]=0.0 #neta
+            #for i in range(self.number_of_fibers):
+             #   new_params[2*i]=700 #T1s
             
-            noise_level=0    
+            noise_level=0.2    
             sim_data=newargs[:,1]+IRDiffEqn(new_params,newargs) # this is the equation (sim) result
             random.seed()
             #real only:
             #newargs[:,1]=np.absolute(sim_data+[random.gauss(0,25) for i in range(len(sim_data))]) 
-            #two channels:
+            #add noise on two channels:
+            
             newargs[:,1]=np.sqrt(np.square(sim_data+[random.gauss(0,noise_level) for i in range(len(sim_data))])+np.square([random.gauss(0,noise_level) for i in range(len(sim_data))]))
                
         #fit the equation: there are a lot of options here; user can modify this call
@@ -320,22 +321,25 @@ class FiberT1Solver:
                 thisDWI=[0, 21, 5, 30]
                 for i in range(self.number_of_TIs):
                     for j in range(4):
-                        plotdata[i,j]=args[i*self.number_of_diff_encodes+thisDWI[j],1]
+                        plotdata[i,j]=newargs[i*self.number_of_diff_encodes+thisDWI[j],1]
                 ax.plot(range(self.number_of_TIs),plotdata[:,0], 'k--')
                 ax.plot(range(self.number_of_TIs),plotdata[:,1], 'b--')
                 ax.plot(range(self.number_of_TIs),plotdata[:,2], 'g--')
                 ax.plot(range(self.number_of_TIs),plotdata[:,3], 'r--')
-                ax.set_title('All TIs, b=0 (black), ~z (blue), ~y (green), ~x (red) gradient orientations', fontsize=18)
+                if (self.sagittal):
+                    ax.set_title('All TIs, b=0 (black), ~x (blue), ~z (green), ~y (red) gradient orientations', fontsize=18)
+                else:    
+                    ax.set_title('All TIs, b=0 (black), ~z (blue), ~y (green), ~x (red) gradient orientations', fontsize=18)
                 
                 #now set to predicted signal:
                 
-                pred_sig_res=IRDiffEqn(res_lsq.x,args)
+                pred_sig_res=IRDiffEqn(res_lsq.x,newargs)
                 
                 
                 
                 for i in range(self.number_of_TIs):                   
                     for j in range(4):
-                        plotdata[i,j]=args[i*self.number_of_diff_encodes+thisDWI[j],1]+pred_sig_res[i*self.number_of_diff_encodes+thisDWI[j]]
+                        plotdata[i,j]=newargs[i*self.number_of_diff_encodes+thisDWI[j],1]+pred_sig_res[i*self.number_of_diff_encodes+thisDWI[j]]
                 ax.plot(range(self.number_of_TIs),plotdata[:,0], 'k-')
                 ax.plot(range(self.number_of_TIs),plotdata[:,1], 'b-')
                 ax.plot(range(self.number_of_TIs),plotdata[:,2], 'g-')
