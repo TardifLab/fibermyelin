@@ -28,17 +28,16 @@ EPSILON=9E-9
 
 #file orientation (if False, assumes axial)
 global sagittal 
-sagittal=True
+sagittal=False
 
-global output_fixel
-output_fixel=False
+
 #for visualization W/L:
 #asparagus 800,1500
 #human brain 600,725
 global vis_min
-vis_min=500
+vis_min=575
 global vis_max
-vis_max=1500
+vis_max=750
 global vis_range
 vis_range=vis_max-vis_min
 
@@ -46,6 +45,10 @@ vis_range=vis_max-vis_min
 TR=8000
 
 #end hardcoded stuff
+
+global output_fixel
+output_fixel=False #default; I don't think I need to set this; will default to False anyway.
+                    #we might want to always have this be true
 
 print('This a script to process IR-diffusion data\n\
 NB: it does not currently handle data acquired with angulation\n\
@@ -308,85 +311,90 @@ if not myargs.visualize:
     
     
         
-T1_array_zeroed=np.zeros(AFD_img.header.get_data_shape()) #HERE to vis currently doing this when vis, put in not vis loop once debugged
-  
-for j in range(len(voxels[0])):  
-    counter=0
-    for l in range(max_fibers): 
-                         
-        if AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]>AFD_thresh:            
-            T1_array_zeroed[voxels[0][j],voxels[1][j],voxels[2][j],l]=T1_array[voxels[0][j],voxels[1][j],voxels[2][j],counter]
-            counter+=1
-        else:
-            T1_array_zeroed[voxels[0][j],voxels[1][j],voxels[2][j],l]=0.0
-          
-if (False):   
-    #output the T1s to match the directions initially input:
-    #the intent is to then use voxel2fixel, but it fails.  It writes the first T1 to all fixels.
-    T1_img_zeroed = nib.Nifti1Image(T1_array_zeroed, AFD_img.affine, AFD_img.header)
-    nib.save(T1_img_zeroed, "t1_zeroed.nii")   
-     
-
-
-if (myargs.output_fixel): 
-   
-#output the directions, t1, and index files in sparse format. 
-#I'm doing this for the thresholded data
-#index is the size of AFD, first frame
+    T1_array_zeroed=np.zeros(AFD_img.header.get_data_shape()) #NB: if you want to output fixel data without redoing the fitting, unindent from here to Visualization and use -vis
     
-     
-    new_size=[AFD_img.header.get_data_shape()[0],AFD_img.header.get_data_shape()[1], AFD_img.header.get_data_shape()[2],2]
-    
-    index_array=np.zeros(new_size)
-    
-    #temporarily make these as enormous as possible:
-    
-    
-    thresh_dirs_array=np.zeros([AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2],3,1])
-    
-    t1_fixel_array=np.zeros([AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2],1,1])
-    
-    counter=0
-    #for i in range(AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2])
-    for i in range(len(voxels[0])):#for just the mask
-        fibercounter=0
-        for l in range(max_fibers):   
-                        
-            if AFD_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],l]>AFD_thresh: 
-                if (index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]==0):#set on first fiber
-                    
-                    index_array[voxels[0][i],voxels[1][i],voxels[2][i],1]=counter
-                thresh_dirs_array[counter,0,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l]
-                thresh_dirs_array[counter,1,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+1]
-                thresh_dirs_array[counter,2,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+2]
-                t1_fixel_array[counter,0,0]=T1_array_zeroed[voxels[0][i],voxels[1][i],voxels[2][i],l]
-                
+    for j in range(len(voxels[0])):  
+        counter=0
+        for l in range(max_fibers): 
+                             
+            if AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]>AFD_thresh:            
+                T1_array_zeroed[voxels[0][j],voxels[1][j],voxels[2][j],l]=T1_array[voxels[0][j],voxels[1][j],voxels[2][j],counter]
                 counter+=1
-                fibercounter+=1
-                index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]=fibercounter
-                
+            else:
+                T1_array_zeroed[voxels[0][j],voxels[1][j],voxels[2][j],l]=0.0
+              
+    if (False):   
+        #output the T1s to match the directions initially input:
+        #the intent is to then use voxel2fixel, but it fails.  It writes the first T1 to all fixels.
+        T1_img_zeroed = nib.Nifti1Image(T1_array_zeroed, AFD_img.affine, AFD_img.header)
+        nib.save(T1_img_zeroed, "t1_zeroed.nii")   
          
-    if not os.path.exists("t1_fixel_dir"):
-        os.makedirs("t1_fixel_dir")
-               
-    index_img = nib.Nifti1Image(index_array, np.eye(4))
-    nib.save(index_img, "t1_fixel_dir/index.nii")
     
     
-    
-    thresh_dirs_img=nib.Nifti1Image(thresh_dirs_array[0:counter,0:3,0],np.eye(4))
-    nib.save(thresh_dirs_img, "t1_fixel_dir/directions.nii") 
-    
-    #DO: why on earth does this image end up size counterx3x1?? I am correcting it with fslroi
-    t1_fixel_img=nib.Nifti1Image(t1_fixel_array[0:counter,0,0], np.eye(4)) 
-    
-    nib.save(thresh_dirs_img, "t1_fixel_dir/t1_fixel.nii") 
-    mycommand="fslroi t1_fixel_dir/t1_fixel.nii t1_fixel_dir/t1_fixel_1.nii 0 %d 0 1 0 1" % counter 
-    
-    os.system(mycommand)
-    os.system("rm -f t1_fixel_dir/t1_fixel.nii")
-    
-#Visualize: currently always done
+    if (myargs.output_fixel): 
+       
+    #output the directions, t1, and index files in sparse format. 
+    #I'm doing this for the thresholded data
+    #index is the size of AFD, first frame
+        
+         
+        new_size=[AFD_img.header.get_data_shape()[0],AFD_img.header.get_data_shape()[1], AFD_img.header.get_data_shape()[2],2]
+        
+        index_array=np.zeros(new_size)
+        
+        #temporarily make these as enormous as possible:
+        
+        
+        thresh_dirs_array=np.zeros([AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2],3,1])
+        
+        t1_fixel_array=np.zeros([AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2],1,1])
+        
+        counter=0
+        #for i in range(AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2])
+        for i in range(len(voxels[0])):#for just the mask
+            fibercounter=0
+            for l in range(max_fibers):   
+                            
+                if AFD_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],l]>AFD_thresh: 
+                    if (index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]==0):#set on first fiber
+                        
+                        index_array[voxels[0][i],voxels[1][i],voxels[2][i],1]=counter
+                    thresh_dirs_array[counter,0,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l]
+                    thresh_dirs_array[counter,1,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+1]
+                    thresh_dirs_array[counter,2,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+2]
+                    t1_fixel_array[counter,0,0]=T1_array_zeroed[voxels[0][i],voxels[1][i],voxels[2][i],l]
+                    
+                    counter+=1
+                    fibercounter+=1
+                    index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]=fibercounter
+                    
+             
+        if not os.path.exists("t1_fixel_dir"):
+            os.makedirs("t1_fixel_dir")
+                   
+        index_img = nib.Nifti1Image(index_array,AFD_img.affine)
+        
+        
+        nib.save(index_img, "t1_fixel_dir/index.nii")
+        
+        
+        
+        thresh_dirs_img=nib.Nifti1Image(thresh_dirs_array[0:counter,0:3,0],AFD_img.affine)
+        
+        
+        nib.save(thresh_dirs_img, "t1_fixel_dir/directions.nii") 
+        
+        #DO: why on earth does this image end up size counterx3x1?? I am correcting it with fslroi
+        t1_fixel_img=nib.Nifti1Image(t1_fixel_array[0:counter,0,0],AFD_img.affine) 
+        
+        
+        nib.save(thresh_dirs_img, "t1_fixel_dir/t1_fixel_1.nii") 
+        mycommand="fslroi t1_fixel_dir/t1_fixel_1.nii t1_fixel_dir/t1_fixel.nii 0 %d 0 1 0 1" % counter 
+        
+        os.system(mycommand)
+        os.system("rm -f t1_fixel_dir/t1_fixel_1.nii")
+        
+#Visualize: 
 #the visualization is done in voxel space == world space for no angulation and isotropic steps and therefore only looks correct for isotropic voxels (and a right handed coordinate system, which nifti is.)
 #color code by T1
                 
@@ -395,107 +403,107 @@ if (myargs.output_fixel):
 
 #DO: remove underscores
 
+if (myargs.visualize):
 
-
-_renderwindow = vtk.vtkRenderWindow()
-_renderer = vtk.vtkRenderer()
-_renderwindowinteractor = vtk.vtkRenderWindowInteractor()
-_background_color = [1,1,1]        
-_renderer.SetBackground(_background_color[0],_background_color[1], _background_color[2])
-_renderwindow.AddRenderer(_renderer)
-_renderwindowinteractor.SetRenderWindow(_renderwindow)
-_renderwindowinteractor.Initialize()
-_interactor_style_trackball = vtk.vtkInteractorStyleTrackballCamera()
-_renderwindowinteractor.SetInteractorStyle(_interactor_style_trackball)
-_mapper = vtk.vtkPolyDataMapper()
-
-#now create the vectors to display:
-_polydata = vtk.vtkPolyData()
-_hedgehog = vtk.vtkHedgeHog()
-_points = vtk.vtkPoints()
-_scalars = vtk.vtkFloatArray()
-_vectors = vtk.vtkFloatArray()
-_lut = vtk.vtkLookupTable()
-#_lut.SetTableRange(vis_min, vis_max) #this isn't working
-_lut.Build()
-#print _lut.GetRange()
-_vectors.SetNumberOfComponents(3) 
-
-counter=0
-for j in range(len(voxels[0])):    
-    #loop through number of fibers  
-    for i in range(0,number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]):
-        
-        if sagittal:#for sagittal, 0 is y, 1 is z, and 2 is x:
-            _points.InsertPoint(counter, (voxels[2][j],voxels[0][j],voxels[1][j])) 
-        else:#for transverse:    
-            _points.InsertPoint(counter, (voxels[0][j],voxels[1][j],voxels[2][j]))     
+    _renderwindow = vtk.vtkRenderWindow()
+    _renderer = vtk.vtkRenderer()
+    _renderwindowinteractor = vtk.vtkRenderWindowInteractor()
+    _background_color = [1,1,1]        
+    _renderer.SetBackground(_background_color[0],_background_color[1], _background_color[2])
+    _renderwindow.AddRenderer(_renderer)
+    _renderwindowinteractor.SetRenderWindow(_renderwindow)
+    _renderwindowinteractor.Initialize()
+    _interactor_style_trackball = vtk.vtkInteractorStyleTrackballCamera()
+    _renderwindowinteractor.SetInteractorStyle(_interactor_style_trackball)
+    _mapper = vtk.vtkPolyDataMapper()
     
-        thisfiber=0.4*fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*i:3*i+3]
-        thist1=float(T1_array[voxels[0][j],voxels[1][j],voxels[2][j],i])       
+    #now create the vectors to display:
+    _polydata = vtk.vtkPolyData()
+    _hedgehog = vtk.vtkHedgeHog()
+    _points = vtk.vtkPoints()
+    _scalars = vtk.vtkFloatArray()
+    _vectors = vtk.vtkFloatArray()
+    _lut = vtk.vtkLookupTable()
+    #_lut.SetTableRange(vis_min, vis_max) #this isn't working
+    _lut.Build()
+    #print _lut.GetRange()
+    _vectors.SetNumberOfComponents(3) 
+    
+    counter=0
+    for j in range(len(voxels[0])):    
+        #loop through number of fibers  
+        for i in range(0,number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]):
+            
+            if sagittal:#for sagittal, 0 is y, 1 is z, and 2 is x:
+                _points.InsertPoint(counter, (voxels[2][j],voxels[0][j],voxels[1][j])) 
+            else:#for transverse:    
+                _points.InsertPoint(counter, (voxels[0][j],voxels[1][j],voxels[2][j]))     
         
-        _vectors.InsertTuple(counter,tuple(thisfiber)) 
-          
-        
-        #_scalars.InsertNextValue(thist1)
-        _scalars.InsertNextValue((thist1-vis_min)/vis_range)
-        
-        counter+=1
-        if sagittal:#for sagittal, 0 is y, 1 is z, and 2 is x:
-            _points.InsertPoint(counter, (voxels[2][j],voxels[0][j],voxels[1][j])) 
-        else:#for transverse:    
-            _points.InsertPoint(counter, (voxels[0][j],voxels[1][j],voxels[2][j]))  
-        
-        #fiber pointing in other way, so centered:         
-        revfiber=-1.0*thisfiber                   
-        _vectors.InsertTuple(counter,tuple(revfiber))
-        
-        
-        #_scalars.InsertNextValue(thist1)
-        _scalars.InsertNextValue((thist1-vis_min)/vis_range)
-        
-        counter+=1
-        
-
-#DO: implement window/level interaction
-
-_polydata.SetPoints(_points)
-_polydata.GetPointData().SetVectors(_vectors)
-_polydata.GetPointData().SetScalars(_scalars)
-
-_hedgehog.SetInput(_polydata)
-#hedgehog.SetScaleFactor(1)
-
-
-#if you want tubes instead of lines:
-#_tubefilter = vtk.vtkTubeFilter()
-#_tubefilter.SetInput(_hedgehog.GetOutput())  
-#_tubefilter.SetRadius(0.08)
-#_mapper.SetInput(_tubefilter.GetOutput())
-
-#if just lines (preferred):
-_mapper.SetInput(_hedgehog.GetOutput())
-
-
-
-_mapper.ScalarVisibilityOn()
-_mapper.SetLookupTable(_lut)
-_mapper.SetColorModeToMapScalars()
-_mapper.SetScalarModeToUsePointData()
-
-_actor = vtk.vtkActor()
-_actor.SetMapper(_mapper)
-_actor.GetProperty().SetLineWidth(10)
-_renderer.AddActor(_actor)
-
-#colourbar:
-_lut.SetHueRange(0.7,0.0)
-
-
-_colourbar = vtk.vtkScalarBarActor()
-_colourbar.SetLookupTable(_lut)
-_colourbar.SetNumberOfLabels(0)
-_renderer.AddActor2D(_colourbar)
-
-_renderer.Render()
-_renderwindowinteractor.Start()
+            thisfiber=0.4*fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*i:3*i+3]
+            thist1=float(T1_array[voxels[0][j],voxels[1][j],voxels[2][j],i])       
+            
+            _vectors.InsertTuple(counter,tuple(thisfiber)) 
+              
+            
+            #_scalars.InsertNextValue(thist1)
+            _scalars.InsertNextValue((thist1-vis_min)/vis_range)
+            
+            counter+=1
+            if sagittal:#for sagittal, 0 is y, 1 is z, and 2 is x:
+                _points.InsertPoint(counter, (voxels[2][j],voxels[0][j],voxels[1][j])) 
+            else:#for transverse:    
+                _points.InsertPoint(counter, (voxels[0][j],voxels[1][j],voxels[2][j]))  
+            
+            #fiber pointing in other way, so centered:         
+            revfiber=-1.0*thisfiber                   
+            _vectors.InsertTuple(counter,tuple(revfiber))
+            
+            
+            #_scalars.InsertNextValue(thist1)
+            _scalars.InsertNextValue((thist1-vis_min)/vis_range)
+            
+            counter+=1
+            
+    
+    #DO: implement window/level interaction
+    
+    _polydata.SetPoints(_points)
+    _polydata.GetPointData().SetVectors(_vectors)
+    _polydata.GetPointData().SetScalars(_scalars)
+    
+    _hedgehog.SetInput(_polydata)
+    #hedgehog.SetScaleFactor(1)
+    
+    
+    #if you want tubes instead of lines:
+    #_tubefilter = vtk.vtkTubeFilter()
+    #_tubefilter.SetInput(_hedgehog.GetOutput())  
+    #_tubefilter.SetRadius(0.08)
+    #_mapper.SetInput(_tubefilter.GetOutput())
+    
+    #if just lines (preferred):
+    _mapper.SetInput(_hedgehog.GetOutput())
+    
+    
+    
+    _mapper.ScalarVisibilityOn()
+    _mapper.SetLookupTable(_lut)
+    _mapper.SetColorModeToMapScalars()
+    _mapper.SetScalarModeToUsePointData()
+    
+    _actor = vtk.vtkActor()
+    _actor.SetMapper(_mapper)
+    _actor.GetProperty().SetLineWidth(10)
+    _renderer.AddActor(_actor)
+    
+    #colourbar:
+    _lut.SetHueRange(0.7,0.0)
+    
+    
+    _colourbar = vtk.vtkScalarBarActor()
+    _colourbar.SetLookupTable(_lut)
+    _colourbar.SetNumberOfLabels(0)
+    _renderer.AddActor2D(_colourbar)
+    
+    _renderer.Render()
+    _renderwindowinteractor.Start()
