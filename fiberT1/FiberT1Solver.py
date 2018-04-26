@@ -23,7 +23,7 @@ plot_fit=False
 global just_b0
 just_b0=False
 global simulate
-simulate=False
+simulate=True
 
 #if True, see hardcoded vic value in IRDiffEq function.
 #currently 0.4: lower than healthy, but a better fit near the noise floor
@@ -265,7 +265,7 @@ class FiberT1Solver:
             #for i in range(self.number_of_fibers):
              #   new_params[2*i]=700 #T1s
             
-            noise_level=0.2    
+            noise_level=0.1    
             sim_data=newargs[:,1]+IRDiffEqn(new_params,newargs) # this is the equation (sim) result
             random.seed()
             #real only:
