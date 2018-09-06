@@ -24,6 +24,8 @@ global just_b0
 just_b0=False
 global simulate
 simulate=False
+global set_Dpar_equal
+set_Dpar_equal=False
 
 #if True, see hardcoded vic value in IRDiffEq function.
 #currently 0.4: lower than healthy, but a better fit near the noise floor
@@ -244,15 +246,17 @@ class FiberT1Solver:
                 
                 
         
-        #to weight b=0 more (instead of actualy acquiring more), repeat the first point (b=0, first TI) N more times:        
+        #to weight b=0 more (instead of actually acquiring more), repeat N more times:        
         if (True):
-            N=np.int(0.1*self.number_of_TIs*self.number_of_diff_encodes)
-            newargs=np.zeros((self.number_of_TIs*self.number_of_diff_encodes+N,6+6*self.number_of_fibers))
+            N=np.int(0.1*(self.number_of_diff_encodes-1))-1
+            newargs=np.zeros((self.number_of_TIs*self.number_of_diff_encodes+self.number_of_TIs*N,6+6*self.number_of_fibers))
             for i in range(self.number_of_TIs*self.number_of_diff_encodes):
                 newargs[i,:]=args[i,:]
-            for i in range(self.number_of_TIs*self.number_of_diff_encodes,self.number_of_TIs*self.number_of_diff_encodes+N):
-                newargs[i,:]=args[0,:]      
-            
+            for j in range(self.number_of_TIs):
+                for i in range(N):
+                
+                    newargs[self.number_of_TIs*self.number_of_diff_encodes+j*N+i,:]=args[j*self.number_of_TIs,:]      #the b=0 for that TI
+                    
               
                 
         if (simulate):#simulate data for these input fibers and AFDs: 
@@ -262,12 +266,13 @@ class FiberT1Solver:
             for i in range(self.number_of_fibers):
                 new_params[2*i]=700 #T1s
             
-            noise_level=0    
+            noise_level=0.05    
             sim_data=newargs[:,1]+IRDiffEqn(new_params,newargs) # this is the equation (sim) result
             random.seed()
             #real only:
             #newargs[:,1]=np.absolute(sim_data+[random.gauss(0,25) for i in range(len(sim_data))]) 
-            #two channels:
+            #add noise on two channels:
+            
             newargs[:,1]=np.sqrt(np.square(sim_data+[random.gauss(0,noise_level) for i in range(len(sim_data))])+np.square([random.gauss(0,noise_level) for i in range(len(sim_data))]))
                
         #fit the equation: there are a lot of options here; user can modify this call
@@ -317,22 +322,25 @@ class FiberT1Solver:
                 thisDWI=[0, 21, 5, 30]
                 for i in range(self.number_of_TIs):
                     for j in range(4):
-                        plotdata[i,j]=args[i*self.number_of_diff_encodes+thisDWI[j],1]
+                        plotdata[i,j]=newargs[i*self.number_of_diff_encodes+thisDWI[j],1]
                 ax.plot(range(self.number_of_TIs),plotdata[:,0], 'k--')
                 ax.plot(range(self.number_of_TIs),plotdata[:,1], 'b--')
                 ax.plot(range(self.number_of_TIs),plotdata[:,2], 'g--')
                 ax.plot(range(self.number_of_TIs),plotdata[:,3], 'r--')
-                ax.set_title('All TIs, b=0 (black), ~z (blue), ~y (green), ~x (red) gradient orientations', fontsize=18)
+                if (self.sagittal):
+                    ax.set_title('All TIs, b=0 (black), ~x (blue), ~z (green), ~y (red) gradient orientations', fontsize=18)
+                else:    
+                    ax.set_title('All TIs, b=0 (black), ~z (blue), ~y (green), ~x (red) gradient orientations', fontsize=18)
                 
                 #now set to predicted signal:
                 
-                pred_sig_res=IRDiffEqn(res_lsq.x,args)
+                pred_sig_res=IRDiffEqn(res_lsq.x,newargs)
                 
                 
                 
                 for i in range(self.number_of_TIs):                   
                     for j in range(4):
-                        plotdata[i,j]=args[i*self.number_of_diff_encodes+thisDWI[j],1]+pred_sig_res[i*self.number_of_diff_encodes+thisDWI[j]]
+                        plotdata[i,j]=newargs[i*self.number_of_diff_encodes+thisDWI[j],1]+pred_sig_res[i*self.number_of_diff_encodes+thisDWI[j]]
                 ax.plot(range(self.number_of_TIs),plotdata[:,0], 'k-')
                 ax.plot(range(self.number_of_TIs),plotdata[:,1], 'b-')
                 ax.plot(range(self.number_of_TIs),plotdata[:,2], 'g-')
@@ -507,7 +515,10 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
                 if (not fix_D_phantom3):
                    
                     #params[2*i+1] is Dpar
-                    Dpar=params[2*i+1]
+                    if (set_Dpar_equal):
+                        Dpar=params[1]
+                    else:
+                        Dpar=params[2*i+1]
                     
                     
                     #averages the intra- (0) and exa-axonal tensors to get Dperp                 
