@@ -19,11 +19,13 @@ import random
 
 #hardcoded global vars:
 global plot_fit
-plot_fit=False
+plot_fit=True
 global just_b0
 just_b0=False
 global simulate
 simulate=False
+global sim_noise_level
+sim_noise_level=8 #comparable to actual noise mean
 global set_Dpar_equal
 set_Dpar_equal=False
 
@@ -31,7 +33,9 @@ set_Dpar_equal=False
 #currently 0.4: lower than healthy, but a better fit near the noise floor
 #I recommend actually computing it instead
 global fix_vic 
-fix_vic=False
+fix_vic=True
+global fixed_vic
+fixed_vic=0.4
 
 #this was a one-time experiment in rat spinal cord cuprizone phantom
 #if True, see below in code for hardcoded values for phantom3
@@ -157,22 +161,28 @@ class FiberT1Solver:
         #create the g-vector for each fiber in coord system aligned along that fiber:        
         for k in range(0,self.number_of_fibers):  
            
-            fx=self.fiber_dirs[k,0]            
-            fy=self.fiber_dirs[k,1]            
-            fz=self.fiber_dirs[k,2]
+        
             
+            f=np.zeros(3)
             
+            f[0]=self.fiber_dirs[k,0]
+            f[1]=self.fiber_dirs[k,1]
+            f[2]=self.fiber_dirs[k,2]
                             
-            v_orth1=GetOrthVector([fx, fy, fz])
-            v_orth2=np.cross([fx, fy, fz],v_orth1)
-            
-            
+            v_orth1=GetOrthVector(f)
+            v_orth2=np.cross(f,v_orth1)
             
             
                            
             #transformation into coord system of (f,v_orth1,v_orth2):
                         
-            xfm_matrix=linalg.inv(np.array([[fx, fy, fz], v_orth1, v_orth2]))
+         
+            xfm_forward=np.transpose([f,v_orth1,v_orth2])
+            
+           
+            xfm_matrix=linalg.inv(xfm_forward)          
+            
+                        
             
             if (fix_D_phantom3):
                 #get Dperp and Dpar from tensor fit in single fiber voxels with appropriate orientation and AFD>0.6
@@ -207,22 +217,40 @@ class FiberT1Solver:
                 #bvecs are in **either voxel space or PRS**: same for phantom3 case  
                 #we convert the axes here for non-transverse
                 #this doesn't handle any angulation!!!
-                #fiber directions are in world space, ==voxel space once we exchange the axes if no angulation
+                #fiber directions are in world space, ==voxel space once we exchange the axes and account for strides if no angulation
                 if (self.sagittal):                        
                     gtest=self.grad_table.bvecs[j,0:3] 
                     g=np.ones(3)
                     
-                    g[0]=gtest[1]
-                    g[1]=gtest[2]
-                    g[2]=gtest[0]
+                    #Q why was this here? this would take us from xyz to sag yzx
+                    #we think the fiber dirs are in xyz.
+                    #g[0]=gtest[1]
+                    #g[1]=gtest[2]
+                    #g[2]=gtest[0]
+                    
+                    #we think the fiber dirs are in xyz.
+                   
+                    
+                    #x and y have negative strides
+                    gtest[2]=-1.0*gtest[2] #x
+                    gtest[0]=-1.0*gtest[0] #y
+                    
+                    #then put it in xyz:
+                    g[0]=gtest[2]
+                    g[1]=gtest[0]
+                    g[2]=gtest[1]
                     
                 else:#axial
                     g=self.grad_table.bvecs[j,0:3] 
+                    #negate x because that's what dcm2nii does (negative x stride):
+                    g[0]=-1.0*g[0]
                 
                 gnew=np.zeros(3)            
-                gnew[0]=g[0]*xfm_matrix[0,0]+g[1]*xfm_matrix[1,0]+g[2]*xfm_matrix[2,0]
-                gnew[1]=g[0]*xfm_matrix[0,1]+g[1]*xfm_matrix[1,1]+g[2]*xfm_matrix[2,1]
-                gnew[2]=g[0]*xfm_matrix[0,2]+g[1]*xfm_matrix[1,2]+g[2]*xfm_matrix[2,2]
+                
+                
+                gnew[0]=xfm_matrix[0,0]*g[0]+xfm_matrix[0,1]*g[1]+xfm_matrix[0,2]*g[2]
+                gnew[1]=xfm_matrix[1,0]*g[0]+xfm_matrix[1,1]*g[1]+xfm_matrix[1,2]*g[2]
+                gnew[2]=xfm_matrix[2,0]*g[0]+xfm_matrix[2,1]*g[1]+xfm_matrix[2,2]*g[2]
                 
                 #check some things:
                 #print("fiber %f %f %f v_orth1 %f %f %f v_orth2 %f %f %f\ng %f %f %f gnew %f %f %f det %f" % (fx, fy, fz, v_orth1[0], v_orth1[1], v_orth1[2], v_orth2[0], v_orth2[1], v_orth2[2], g[0], g[1], g[2], gnew[0], gnew[1], gnew[2], linalg.det(np.array([[fx, fy, fz],v_orth1, v_orth2]))))
@@ -265,15 +293,15 @@ class FiberT1Solver:
             new_params[self.number_of_fibers]=0.0 #neta
             for i in range(self.number_of_fibers):
                 new_params[2*i]=700 #T1s
+                new_params[2*i+1]=1.5E-3 #Di
             
-            noise_level=0.05    
             sim_data=newargs[:,1]+IRDiffEqn(new_params,newargs) # this is the equation (sim) result
             random.seed()
             #real only:
             #newargs[:,1]=np.absolute(sim_data+[random.gauss(0,25) for i in range(len(sim_data))]) 
             #add noise on two channels:
             
-            newargs[:,1]=np.sqrt(np.square(sim_data+[random.gauss(0,noise_level) for i in range(len(sim_data))])+np.square([random.gauss(0,noise_level) for i in range(len(sim_data))]))
+            newargs[:,1]=np.sqrt(np.square(sim_data+[random.gauss(0,sim_noise_level) for i in range(len(sim_data))])+np.square([random.gauss(0,sim_noise_level) for i in range(len(sim_data))]))
                
         #fit the equation: there are a lot of options here; user can modify this call
         #bounds could be implemented for 'lm'
@@ -301,7 +329,8 @@ class FiberT1Solver:
         
         #print all fitted parameters:
         print(res_lsq.x)
-        
+        print("SSE %f" % res_lsq.cost)
+        print("vic %f" % self.vic)
         
         if (plot_fit):#look at the data:             
             # Create a figure instance
@@ -327,10 +356,8 @@ class FiberT1Solver:
                 ax.plot(range(self.number_of_TIs),plotdata[:,1], 'b--')
                 ax.plot(range(self.number_of_TIs),plotdata[:,2], 'g--')
                 ax.plot(range(self.number_of_TIs),plotdata[:,3], 'r--')
-                if (self.sagittal):
-                    ax.set_title('All TIs, b=0 (black), ~x (blue), ~z (green), ~y (red) gradient orientations', fontsize=18)
-                else:    
-                    ax.set_title('All TIs, b=0 (black), ~z (blue), ~y (green), ~x (red) gradient orientations', fontsize=18)
+                
+                ax.set_title('All TIs, b=0 (black), ~z (blue), ~y (green), ~x (red) gradient orientations', fontsize=18)
                 
                 #now set to predicted signal:
                 
@@ -346,8 +373,8 @@ class FiberT1Solver:
                 ax.plot(range(self.number_of_TIs),plotdata[:,2], 'g-')
                 ax.plot(range(self.number_of_TIs),plotdata[:,3], 'r-')
                 
-                textstr='dashed: data\nsolid: fit'
-                ax.text(0.05,0.95,textstr)
+                textstr='dashed: data\nsolid: fit\n\nactual directions:\n~x=[-0.97958797216415, 0.17135678231716, 0.10509198158979]\n~y=[0.20307792723178, 0.94054549932479, -0.27227476239204]\n~z=[-0.20379328727722, 0.17156073451042, 0.96386468410492]'
+                ax.text(0.9,250,textstr)
                 
                 #DO: predicted for a more reasonable Dpar: run all (fit) a second time
 
@@ -421,7 +448,8 @@ class FiberT1Solver:
         #DO: assert size of IR_DWIs checks out
         
         #world space to voxel space transform is unity if aquired with no angulation and axial
-    
+        #note the added issue of "strided" voxel space
+        
         #DO: check whether mrtrix outputs in voxel space or world space (could be either, but it is always xyz, even if sag acq)
         #its worldspace is the same as nii, which is not the same as dicom
     
@@ -456,7 +484,10 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
     temp_array=args[0]
     TR=temp_array[2]#currently a constant; we don't have a sequence with a different but constant TR per slice. Need Bloch sim if it varies.   
     numfibers=int(temp_array[5]) #repeated constant
-    vic=temp_array[6] #repeated constant, hardcoded below if fix_vic flag is True 
+    if (fix_vic):
+        vic=fixed_vic
+    else:
+        vic=temp_array[6] #repeated constant
     AFD=np.zeros(numfibers)
     for j in range(0,numfibers):
         AFD[j]=temp_array[7+6*j]
@@ -476,12 +507,8 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
             gnewy[i,j]=temp_array[9+6*j]
             gnewz[i,j]=temp_array[10+6*j]
             
+  
     
-    
-    
-    if (fix_vic):
-        vic=0.4
-   
     
     eq=np.zeros(number_of_obs)
     sig=np.zeros(number_of_obs)
@@ -536,8 +563,6 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
                
                                                
                 #D in coord system of fiber dir and orth vectors (f,v_orth1,v_orth2)
-                                               
-                                               
                 D=np.array([[Dpar, 0, 0],[0, Dperp, 0],[0, 0, Dperp]])
                 
                 
@@ -569,25 +594,17 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
             eq[h]+=term2                          
         
         
-        #take magnitude, mult by M0, and for low SNR images (currently b>300 or signal<100), add Johnson noise term neta:        
+        #take magnitude, mult by M0, and add Johnson noise term neta:        
         #params[2*numfibers+1] is M0
         #params[2*numfibers] is noise term neta
         
-        #DO: implement a smart way of determining which TIs we need this for        
-        #if (args[h][0]>300): high b values
-        #if (args[h][1]<100): low signal
+      
+        #noise term for ALL images
         
-        #for now, set one of these to True:
-        if (True): #noise term for ALL images
+        sig[h]=sqrt((params[2*numfibers+1]*eq[h])**2+params[2*numfibers]**2)         
         
-            sig[h]=sqrt((params[2*numfibers+1]*eq[h])**2+params[2*numfibers]**2)         
-        elif(False):#no noise term
-            sig[h]=params[2*numfibers+1]*sqrt(eq[h]**2) 
-        else:#constant noise term, hardcoded here
-            
-            neta=7.544243 #asparagus
-            sig[h]=sqrt((params[2*numfibers+1]*eq[h])**2+neta**2)
-        
+
+    
         out[h]=sig[h]-obs[h]  
         
     #if (numfibers>1):

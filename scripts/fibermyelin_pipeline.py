@@ -30,12 +30,14 @@ EPSILON=9E-9
 global sagittal 
 sagittal=False
 
+global bedpostx
+bedpostx=False
 
 #for visualization W/L:
-#asparagus 800,1500
-#human brain 600,725
+#asparagus 500-800,1500
+#human brain 550-575-600,725-750
 global vis_min
-vis_min=575
+vis_min=550 
 global vis_max
 vis_max=750
 global vis_range
@@ -56,25 +58,21 @@ NB: it assumes the following has already been done:\n\
     -registration of all images and sampling to same voxel space\n\
     -AFD computation with MRtrix\n\
     -optionally, tensor and/or NODDI fit\n\
-NB: vic is currently hardcoded to 0.4 (can change it to another constant or allow the vic to b input\n\
-    in FiberT1Solver function IRDiffEqn)\n\
+NB: there is an option to hardcode vic in FiberT1Solver; the values we get from NODDI are often too high\n\
     0.4 is lower than healthy, but a better fit near the noise floor.\n\
     You must input vic file regardless:\n\
     just input your mask. Edit FiberT1Solver global var fix_vic to actually use vic.\n\
 NB: using vic assumes the same tortuosity for all fibers; we are thinking about an alternative.\n\
-NB: parallel diffusivity is currently output in file Dpar.nii\n\
 NB: there is currently a Johnson noise term added to all images: we need to think about this implementation.\n\
 NB: the data are assumed to have been acquired with diffusion fastest varying, and unshuffled to TI fastest varying.\n\
     i.e., bvals/bvecs have diffusion fastest varying, and input IRdiff images do not.\n\
 NB: the visualization W/L is a WIP\n\
-    todo: "voxel2fixel" the T1 output to view it in mrview - doesn\'t work, it writes the same value for each fiber\n\
 NB: initial parameter values are hardcoded in FiberT1Solver::GetT1s,\n\
     as is the fitting algorithm: currently trust region reflective (\'trf\').\n\
     Upper and lower bounds are also hardcoded\n\
     Comment/uncomment appropriate lines to change fitting algorithm and fitting options.\n\
-NB: the first TI, b=0 image is currently weighted significantly more than the rest.\n\
-NB: future additions that aren\'t here: CSF compartment, GM compartment, short TR\n\
-    (Bloch sim, using TRa file for spin history by slice)')
+NB: the b=0 images are currently weighted significantly more than the rest.\n\
+NB: future additions that aren\'t here: CSF compartment, GM compartment')
 
 
 parser = argparse.ArgumentParser(description='')
@@ -108,6 +106,7 @@ myargs = parser.parse_args()
 #whether or not we use the steady-state (non-infinite TR) equation is hardcoded (to True) in FiberT1Solver::IRDiffEqn\n\
 #however, it won't work if slices shuffled and TR short enough to matter, bc Tr will vary too much for a slice: need Bloch sim
 
+#I believe the bvecs (from dcm2nii) are in voxel space with strides -1,2,3. That is how the code is right now.
 
 #steps: afd, directions
 #convert the AFD and directions files to non-sparse format:
@@ -151,7 +150,22 @@ else:
 AFD_img=nib.load(myargs.afd_image_filename[0])    
 max_fibers=AFD_img.header.get_data_shape()[3]    
 
+
+
 fiber_dirs_img=nib.load(myargs.dirs_image_filename[0]) 
+
+
+
+#FSL BEDPOSTX version:
+
+if (bedpostx):
+    max_fibers=2
+    AFD_img_fsl=[]
+    fiber_dirs_img_fsl=[]
+    AFD_img_fsl.append(nib.load("bedpost_outputs_strides/mean_f1samples_strides.nii"))
+    AFD_img_fsl.append(nib.load("bedpost_outputs_strides/mean_f2samples_strides.nii"))
+    fiber_dirs_img_fsl.append(nib.load("bedpost_outputs_strides/dyads1_strides.nii"))
+    fiber_dirs_img_fsl.append(nib.load("bedpost_outputs_strides/dyads2_strides.nii"))
     
 mask_img=nib.load(myargs.mask_image_filename[0])    
     
@@ -163,8 +177,16 @@ number_of_fibers_array=np.zeros(mask_img.header.get_data_shape(),int)
 AFD_array=np.zeros(AFD_img.header.get_data_shape())
 fiber_dirs_array=np.zeros(fiber_dirs_img.header.get_data_shape())
 
+#FSL BEDPOSTX version:
+if (bedpostx):
+    
+    AFD_array=np.zeros([AFD_img_fsl[0].header.get_data_shape()[0], AFD_img_fsl[0].header.get_data_shape()[1], AFD_img_fsl[0].header.get_data_shape()[2], max_fibers])
+    fiber_dirs_array=np.zeros([AFD_img_fsl[0].header.get_data_shape()[0], AFD_img_fsl[0].header.get_data_shape()[1], AFD_img_fsl[0].header.get_data_shape()[2], 3*max_fibers])
+    
+
 AFD_thresh=float(myargs.AFD_thresh[0])
 
+    
     
 for j in range(len(voxels[0])):
        
@@ -181,6 +203,17 @@ for j in range(len(voxels[0])):
            
     number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]=number_of_fibers        
 
+#FSL BEDPOSTX version:
+#note that fiber dirs in this case are in "strided" voxel space 
+if (bedpostx):
+    for j in range(len(voxels[0])):
+        for l in range(max_fibers):
+            AFD_array[voxels[0][j],voxels[1][j],voxels[2][j],l]=AFD_img_fsl[l].get_data()[voxels[0][j],voxels[1][j],voxels[2][j]]
+            fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*l]=-1.0*fiber_dirs_img_fsl[l].get_data()[voxels[0][j],voxels[1][j],voxels[2][j],0]
+            fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*l+1]=fiber_dirs_img_fsl[l].get_data()[voxels[0][j],voxels[1][j],voxels[2][j],1]
+            fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*l+2]=fiber_dirs_img_fsl[l].get_data()[voxels[0][j],voxels[1][j],voxels[2][j],2]
+        number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]=max_fibers
+        
 if not myargs.visualize:    
     
   
