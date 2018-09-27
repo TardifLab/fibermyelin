@@ -241,7 +241,14 @@ if not myargs.visualize:
     bvals, bvecs = read_bvals_bvecs(myargs.bvals_filename[0],myargs.bvecs_filename[0])
     grad_table = gradient_table(bvals, bvecs)
     
- 
+    #the bvecs are in strided voxel space, so we negate here    
+    if (sagittal):
+        grad_table.bvecs[:,0]=-1.0*grad_table.bvecs[:,0]
+        grad_table.bvecs[:,2]=-1.0*grad_table.bvecs[:,2]
+    else: #axial
+        grad_table.bvecs[:,0]=-1.0*grad_table.bvecs[:,0]
+    #print grad_table.bvecs[:,0]
+    
 
     
     #number of DWIs (assume one b=0, at beginning). assume x,y,z,diff
@@ -252,6 +259,8 @@ if not myargs.visualize:
     
     T1_array=np.zeros(AFD_img.header.get_data_shape())
     Dparfit_array=np.zeros(AFD_img.header.get_data_shape())
+    
+   
        
     for j in range(len(voxels[0])):
 
@@ -302,9 +311,7 @@ if not myargs.visualize:
         
         
         #TRs=TRs_allslices[voxels[2][j]] #HERE do this when have the whole TR history in signal comp.
-        
-        
-        
+ 
        
         if (number_of_fibers>0):
             t1solver=FiberT1Solver()
