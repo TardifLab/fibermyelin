@@ -19,7 +19,7 @@ import random
 
 #hardcoded global vars:
 global plot_fit
-plot_fit=True
+plot_fit=False
 global just_b0
 just_b0=False
 global simulate
@@ -33,7 +33,7 @@ set_Dpar_equal=False
 #currently 0.4: lower than healthy, but a better fit near the noise floor
 #I recommend actually computing it instead
 global fix_vic 
-fix_vic=True
+fix_vic=False
 global fixed_vic
 fixed_vic=0.4
 
@@ -228,22 +228,15 @@ class FiberT1Solver:
                     #g[1]=gtest[2]
                     #g[2]=gtest[0]
                     
-                    #we think the fiber dirs are in xyz.
-                   
                     
-                    #x and y have negative strides
-                    gtest[2]=-1.0*gtest[2] #x
-                    gtest[0]=-1.0*gtest[0] #y
-                    
-                    #then put it in xyz:
+                    #put it in xyz:
                     g[0]=gtest[2]
                     g[1]=gtest[0]
                     g[2]=gtest[1]
                     
                 else:#axial
                     g=self.grad_table.bvecs[j,0:3] 
-                    #negate x because that's what dcm2nii does (negative x stride):
-                    g[0]=-1.0*g[0]
+                    
                 
                 gnew=np.zeros(3)            
                 
@@ -253,7 +246,7 @@ class FiberT1Solver:
                 gnew[2]=xfm_matrix[2,0]*g[0]+xfm_matrix[2,1]*g[1]+xfm_matrix[2,2]*g[2]
                 
                 #check some things:
-                #print("fiber %f %f %f v_orth1 %f %f %f v_orth2 %f %f %f\ng %f %f %f gnew %f %f %f det %f" % (fx, fy, fz, v_orth1[0], v_orth1[1], v_orth1[2], v_orth2[0], v_orth2[1], v_orth2[2], g[0], g[1], g[2], gnew[0], gnew[1], gnew[2], linalg.det(np.array([[fx, fy, fz],v_orth1, v_orth2]))))
+                #print("fiber %f %f %f v_orth1 %f %f %f v_orth2 %f %f %f\ng %f %f %f gnew %f %f %f det %f" % (f[0], f[1], f[2], v_orth1[0], v_orth1[1], v_orth1[2], v_orth2[0], v_orth2[1], v_orth2[2], g[0], g[1], g[2], gnew[0], gnew[1], gnew[2], linalg.det(np.array([f,v_orth1, v_orth2]))))
                 
                 
                 #DO: is g normalized?  yes.
