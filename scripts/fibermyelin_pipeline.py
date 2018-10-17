@@ -30,6 +30,9 @@ EPSILON=9E-9
 global sagittal 
 sagittal=False
 
+global set_Dpar_equal
+set_Dpar_equal=True #have to set in other file too
+
 global bedpostx
 bedpostx=False
 
@@ -37,14 +40,12 @@ bedpostx=False
 #asparagus 500-800,1500
 #human brain 550-575-600,725-750
 global vis_min
-vis_min=550 
+vis_min=1000 
 global vis_max
-vis_max=750
+vis_max=1500
 global vis_range
 vis_range=vis_max-vis_min
 
-#long TR: TRa not used:
-TR=8000
 
 #end hardcoded stuff
 
@@ -92,7 +93,7 @@ parser.add_argument('-IRdiff', dest='IR_diff_image_filename', help='IR diffusion
 parser.add_argument('-TIs', dest='TIs_filename', help='text file of TIs for each slice; required for full computation',  required=False, nargs=1)                   
 parser.add_argument('-bvals', dest='bvals_filename', help='text file of bvals; required for full computation',  required=False, nargs=1)                     
 parser.add_argument('-bvecs', dest='bvecs_filename', help='text file of bvecs; required for full computation',  required=False, nargs=1)                     
-
+parser.add_argument('-TR', dest='TR', help='nominal TR for short-TR steady state equation',required=False,nargs=1)
 
 
 myargs = parser.parse_args()
@@ -102,9 +103,12 @@ myargs = parser.parse_args()
 #assumes already done:
 #standard registration, probably with FSL eddy of *all* images, including the diffusion only dataset
 #everything has to be sampled the same way, and like the IR-diff data, i.e., that number of slices. don't change the slicing because it determines TI
+#i.e. check whether the AFD, etc. have the same smapling and fix them if not.
 
 #whether or not we use the steady-state (non-infinite TR) equation is hardcoded (to True) in FiberT1Solver::IRDiffEqn\n\
-#however, it won't work if slices shuffled and TR short enough to matter, bc Tr will vary too much for a slice: need Bloch sim
+#it requires TR to be input
+#however, it won't work if slices shuffled and TR short enough to matter; we are handling this with dummies.
+
 
 #I believe the bvecs (from dcm2nii) are in voxel space with strides -1,2,3. That is how the code is right now.
 
@@ -133,11 +137,10 @@ myargs = parser.parse_args()
 #then, **flip in x, using fix_IRdiff_sag.py** OR just set strides to -3,1,2,4
 #I think this is because of something in Ilana's unshuffling script, and we could change that and not flip here 
 
-#do same to mask as to files that match it (first 3 dims)
-
-#same for vic 
-#for axial, I needed to set strides of the NODDI output to 1,2,3 
+#do same to mask and vic as to files that match it (first 3 dims)
+#e.g., for axial, I needed to set strides of the NODDI output to 1,2,3 
 #for sagittal, 3,1,2
+
 
 
 if myargs.visualize:
@@ -186,7 +189,7 @@ if (bedpostx):
 
 AFD_thresh=float(myargs.AFD_thresh[0])
 
-    
+TR=float(myargs.TR[0])    
     
 for j in range(len(voxels[0])):
        
@@ -245,7 +248,7 @@ if not myargs.visualize:
     if (sagittal):
         grad_table.bvecs[:,0]=-1.0*grad_table.bvecs[:,0]
         grad_table.bvecs[:,2]=-1.0*grad_table.bvecs[:,2]
-    else: #axial
+    else: #axial (even if prone)
         grad_table.bvecs[:,0]=-1.0*grad_table.bvecs[:,0]
     #print grad_table.bvecs[:,0]
     
@@ -318,7 +321,7 @@ if not myargs.visualize:
             
             #to test fixing D, we have to giev it the voxel coord
             
-            t1solver.SetInputData(fiber_dirs,AFD,IR_DWIs,TIs,grad_table,vic,TR,voxels[0][j],voxels[1][j],voxels[2][j],sagittal)
+            t1solver.SetInputData(fiber_dirs,AFD,IR_DWIs,TIs,grad_table,vic,TR,voxels[0][j],voxels[1][j],voxels[2][j],sagittal,set_Dpar_equal)
             T1s=np.zeros(number_of_fibers)
             Dparfit=np.zeros(number_of_fibers)
             #T1sandDparfit=np.zeros([number_of_fibers,2])
@@ -327,10 +330,16 @@ if not myargs.visualize:
         
         for i in range(0,number_of_fibers):
             if (T1sandDparfit!=None):
-                T1s[i]=T1sandDparfit[2*i]
-                Dparfit[i]=T1sandDparfit[2*i+1]
-                print('T1: %d' % T1s[i])
-                print('Dpar: %f' % Dparfit[i])
+                if (set_Dpar_equal):
+                    T1s[i]=T1sandDparfit[i]
+                    Dparfit[i]=T1sandDparfit[number_of_fibers]
+                    print('T1: %d' % T1s[i])
+                    print('Dpar: %f' % Dparfit[i])
+                else:
+                    T1s[i]=T1sandDparfit[2*i]
+                    Dparfit[i]=T1sandDparfit[2*i+1]
+                    print('T1: %d' % T1s[i])
+                    print('Dpar: %f' % Dparfit[i])
                 T1_array[voxels[0][j],voxels[1][j],voxels[2][j],i]=T1s[i]
                 Dparfit_array[voxels[0][j],voxels[1][j],voxels[2][j],i]=Dparfit[i]
         
