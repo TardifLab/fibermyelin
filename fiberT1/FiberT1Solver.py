@@ -19,7 +19,7 @@ import random
 
 #hardcoded global vars:
 global plot_fit
-plot_fit=True
+plot_fit=False
 global just_b0
 just_b0=False
 global simulate
@@ -406,8 +406,9 @@ class FiberT1Solver:
                 ax.plot(range(self.number_of_TIs),plotdata[:,2], 'g-')
                 ax.plot(range(self.number_of_TIs),plotdata[:,3], 'r-')
                 
-                textstr='dashed: data\nsolid: fit\n\nactual directions:\n~x=[-0.97958797216415, 0.17135678231716, 0.10509198158979]\n~y=[0.20307792723178, 0.94054549932479, -0.27227476239204]\n~z=[-0.20379328727722, 0.17156073451042, 0.96386468410492]'
-                ax.text(0.9,250,textstr)
+                #these vary a bit with acquisition
+                #textstr='dashed: data\nsolid: fit\n\nactual directions:\n~x=[-0.97958797216415, 0.17135678231716, 0.10509198158979]\n~y=[0.20307792723178, 0.94054549932479, -0.27227476239204]\n~z=[-0.20379328727722, 0.17156073451042, 0.96386468410492]'
+                #ax.text(0.9,250,textstr)
                 
                 #DO: predicted for a more reasonable Dpar: run all (fit) a second time
 

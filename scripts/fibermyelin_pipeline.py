@@ -59,12 +59,10 @@ NB: it assumes the following has already been done:\n\
     -registration of all images and sampling to same voxel space\n\
     -AFD computation with MRtrix\n\
     -optionally, tensor and/or NODDI fit\n\
-NB: there is an option to hardcode vic in FiberT1Solver; the values we get from NODDI are often too high\n\
-    0.4 is lower than healthy, but a better fit near the noise floor.\n\
-    You must input vic file regardless:\n\
+NB: there is an option to hardcode vic in FiberT1Solver; you must input a vic file regardless:\n\
     just input your mask. Edit FiberT1Solver global var fix_vic to actually use vic.\n\
 NB: using vic assumes the same tortuosity for all fibers; we are thinking about an alternative.\n\
-NB: there is currently a Johnson noise term added to all images: we need to think about this implementation.\n\
+NB: there is currently a Johnson noise term added to all images.\n\
 NB: the data are assumed to have been acquired with diffusion fastest varying, and unshuffled to TI fastest varying.\n\
     i.e., bvals/bvecs have diffusion fastest varying, and input IRdiff images do not.\n\
 NB: the visualization W/L is a WIP\n\
@@ -101,7 +99,7 @@ myargs = parser.parse_args()
 
 #currently reads in .nii files
 #assumes already done:
-#standard registration, probably with FSL eddy of *all* images, including the diffusion only dataset
+#standard registration? be careful because different slices have different TIs, etc.
 #everything has to be sampled the same way, and like the IR-diff data, i.e., that number of slices. don't change the slicing because it determines TI
 #i.e. check whether the AFD, etc. have the same smapling and fix them if not.
 
