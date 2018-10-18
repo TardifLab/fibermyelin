@@ -194,7 +194,7 @@ class FiberT1Solver:
 
 
         
-        #just using the nominal TR for now:
+        #using the nominal TR:
         args[:,2]=self.TR*np.ones(self.number_of_TIs*self.number_of_diff_encodes)
 
         #create the g-vector for each fiber in coord system aligned along that fiber:        
@@ -461,7 +461,9 @@ class FiberT1Solver:
         self.IR_DWIs = IR_DWIs
         
         self.TIs = TIs
-        
+        print("TIs: ")
+        print TIs
+       
         self.number_of_TIs = len(self.TIs)
                         
         self.grad_table = grad_table
@@ -479,7 +481,7 @@ class FiberT1Solver:
         
         self.sagittal=sag
         
-        set_Dpar_equal=Dpareq #this doesn't work
+        #set_Dpar_equal=Dpareq #this doesn't work. it retains the value set outside of the methods here
         
         #DO: assert size of IR_DWIs checks out
         
@@ -639,20 +641,30 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
             eq[h]+=term2                          
         
         
+        
+        
         #take magnitude, mult by M0, and add Johnson noise term neta:        
         #params[2*numfibers+1] is M0
-        #params[2*numfibers] is noise term neta
+        #params[2*numfibers] is noise term neta, currently added for ALL images
         
-      
-        #noise term for ALL images
-        
-        if (set_Dpar_equal):
-            sig[h]=sqrt((params[numfibers+2]*eq[h])**2+params[numfibers+1]**2)  
+        #if taking magnitude causes a polarity a problem:
+        #hack for first terms we know should be negative:
+        #neta has to be zero in this formulation
+        #I doubt we ever need to do this, set to False now
+        if (False and TIs[h]<300):        
+            if (set_Dpar_equal):
+                sig[h]=params[numfibers+2]*eq[h]
+                obs[h]=-1.0*obs[h]
+            else:
+                sig[h]=params[2*numfibers+1]*eq[h]
+                obs[h]=-1.0*obs[h]
+            out[h]=sig[h]-obs[h]  
         else:
-            sig[h]=sqrt((params[2*numfibers+1]*eq[h])**2+params[2*numfibers]**2)         
-        
-    
-        out[h]=sig[h]-obs[h]  
+            if (set_Dpar_equal):
+                sig[h]=sqrt((params[numfibers+2]*eq[h])**2+params[numfibers+1]**2)  
+            else:
+                sig[h]=sqrt((params[2*numfibers+1]*eq[h])**2+params[2*numfibers]**2)         
+            out[h]=sig[h]-obs[h]  
         
     #if (numfibers>1):
         #print("Dpar: %f %f; T1: %f %f; SOS residuals: %f" % (params[1], params[3], params[0], params[2], np.sum(np.square(out))))
