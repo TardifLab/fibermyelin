@@ -40,9 +40,9 @@ bedpostx=False
 #asparagus 500-800,1500
 #human brain 550-575-600,725-750
 global vis_min
-vis_min=1000 
+vis_min=400 
 global vis_max
-vis_max=1500
+vis_max=575
 global vis_range
 vis_range=vis_max-vis_min
 
@@ -93,7 +93,7 @@ parser.add_argument('-IRdiff', dest='IR_diff_image_filename', help='IR diffusion
 parser.add_argument('-TIs', dest='TIs_filename', help='text file of TIs for each slice; required for full computation',  required=False, nargs=1)                   
 parser.add_argument('-bvals', dest='bvals_filename', help='text file of bvals; required for full computation',  required=False, nargs=1)                     
 parser.add_argument('-bvecs', dest='bvecs_filename', help='text file of bvecs; required for full computation',  required=False, nargs=1)                     
-parser.add_argument('-TR', dest='TR', help='nominal TR for short-TR steady state equation',required=False,nargs=1)
+parser.add_argument('-TR', dest='TR', help='nominal TR for short-TR steady state equation (ms)',required=False,nargs=1)
 
 
 myargs = parser.parse_args()
@@ -109,8 +109,9 @@ myargs = parser.parse_args()
 #it requires TR to be input
 #however, it won't work if slices shuffled and TR short enough to matter; we are handling this with dummies.
 
-
 #I believe the bvecs (from dcm2nii) are in voxel space with strides -1,2,3. That is how the code is right now.
+
+#NOTE: the bvecs and bvals have to be edited to be correct with the dummy scan removed.
 
 #steps: afd, directions
 #convert the AFD and directions files to non-sparse format:
