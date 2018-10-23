@@ -40,7 +40,7 @@ bedpostx=False
 #asparagus 500-800,1500
 #human brain 550-575-600,725-750
 global vis_min
-vis_min=400 
+vis_min=400
 global vis_max
 vis_max=575
 global vis_range
@@ -77,6 +77,7 @@ NB: future additions that aren\'t here: CSF compartment, GM compartment')
 parser = argparse.ArgumentParser(description='')
 
 parser.add_argument('-vis', dest='visualize', help='visualize previously computed fiber T1s', required=False, action='store_true')
+parser.add_argument('-sort', dest='sortT1', help='print out previously computed fiber T1s in 2-fiber voxels, sorted by orientation', required=False, action='store_true')
 parser.add_argument('-t1', dest='t1_image_filename', help='T1 filename: output filename if doing full computation; pre-computed T1 filename if -vis option is selected', required=True, nargs=1)
 parser.add_argument('-Dpar', dest='Dpar_image_filename', help='D_parallel filename', required=False, nargs=1)
 parser.add_argument('-mask', dest='mask_image_filename', help='mask filename, for computation or visualization. If for visualization, must be the same mask previously used for computation', required=True, nargs=1)
@@ -142,13 +143,13 @@ myargs = parser.parse_args()
 
 
 
-if myargs.visualize:
+if (myargs.visualize or myargs.sortT1):
     T1_array=nib.load(myargs.t1_image_filename[0]).get_data()
 else:
     IR_diff_img=nib.load(myargs.IR_diff_image_filename[0])
     vic_img=nib.load(myargs.vic_image_filename[0])
     
-#For both visualize and full computation:  
+#For visualize, sort, and full computation:  
 AFD_img=nib.load(myargs.afd_image_filename[0])    
 max_fibers=AFD_img.header.get_data_shape()[3]    
 
@@ -216,7 +217,7 @@ if (bedpostx):
             fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*l+2]=fiber_dirs_img_fsl[l].get_data()[voxels[0][j],voxels[1][j],voxels[2][j],2]
         number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]=max_fibers
         
-if not myargs.visualize:    
+if not (myargs.visualize or myargs.sortT1):    
     
   
     number_of_slices=0
@@ -451,6 +452,22 @@ if not myargs.visualize:
 
 #DO: remove underscores
 
+if (myargs.sortT1): #sort T1s for other analysis:
+    
+    print("\n\nCrossing fiber T1s:\n")
+    print("~x                   ~y\n")
+    for j in range(len(voxels[0])):  
+        if (number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]==2): #if two fibers
+            if (fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],0]>fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],1]): #more along x than y       
+                ccT1=float(T1_array[voxels[0][j],voxels[1][j],voxels[2][j],0])
+                cingT1=float(T1_array[voxels[0][j],voxels[1][j],voxels[2][j],1])
+            else:
+                ccT1=float(T1_array[voxels[0][j],voxels[1][j],voxels[2][j],1])
+                cingT1=float(T1_array[voxels[0][j],voxels[1][j],voxels[2][j],0])
+            print("%f           %f" % (ccT1, cingT1))
+                
+
+
 if (myargs.visualize):
 
     _renderwindow = vtk.vtkRenderWindow()
@@ -477,8 +494,13 @@ if (myargs.visualize):
     #print _lut.GetRange()
     _vectors.SetNumberOfComponents(3) 
     
+    
+        
     counter=0
-    for j in range(len(voxels[0])):    
+    for j in range(len(voxels[0])):  
+        
+
+        
         #loop through number of fibers  
         for i in range(0,number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]):
             
@@ -488,6 +510,9 @@ if (myargs.visualize):
                 _points.InsertPoint(counter, (voxels[0][j],voxels[1][j],voxels[2][j]))     
         
             thisfiber=0.4*fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*i:3*i+3]
+
+
+            
             thist1=float(T1_array[voxels[0][j],voxels[1][j],voxels[2][j],i])       
             
             _vectors.InsertTuple(counter,tuple(thisfiber)) 
