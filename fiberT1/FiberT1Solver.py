@@ -47,8 +47,10 @@ fix_D_phantom3=False
 
 
 global set_Dpar_equal
-set_Dpar_equal=True #have to set here and in calling script
+set_Dpar_equal=True#have to set here and in calling script
 
+if (just_b0):
+    set_Dpar_equal=False #has to be for code structure and Dpar is irrelevant
 
 
 #import scipy
@@ -64,6 +66,8 @@ class FiberT1Solver:
     def GetT1s(self):
         
        #set initial estimates for the parameters: 
+        
+        
         
         if (set_Dpar_equal):
            
@@ -90,7 +94,25 @@ class FiberT1Solver:
            self.lowerbounds[self.number_of_fibers+2]=0
            self.upperbounds[self.number_of_fibers+2]=np.inf
            
-           
+        elif (just_b0):
+            self.init_params=np.zeros(3) #1 T1       
+            self.lowerbounds=np.zeros(3)
+            self.upperbounds=np.zeros(3)
+            self.number_of_fibers=1
+            self.init_params[0]=700#T1 in ms
+            self.lowerbounds[0]=200#0
+            self.upperbounds[0]=4000#np.inf#
+            #additional Johnson noise term neta:
+            self.init_params[self.number_of_fibers]=0.0
+            self.lowerbounds[self.number_of_fibers]=0 
+            self.upperbounds[self.number_of_fibers]=np.inf
+            #unknown M0: this depends very much on the acquisition
+            #use first signal point (first TI, b=0) and init T1, assume long TR
+            self.init_params[self.number_of_fibers+1]=np.absolute(self.IR_DWIs[0]/(1-2*np.exp(-1.0*self.TIs[0]/700)))
+    
+            #Mo:
+            self.lowerbounds[self.number_of_fibers+1]=0
+            self.upperbounds[self.number_of_fibers+1]=np.inf
         
         else:      
             self.init_params=np.zeros(2*self.number_of_fibers+2) #T1 and Dpar for each fiber        
@@ -632,13 +654,13 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
                 #print("term1 %f term2 %f term3 %f" % (term1, term2, term3))
                 
                 eq[h]+=term1*term2*term3
-        else: #just_b0 NOTE: this only works with set_Dpar_equal False
+        else: #just_b0 
             
-            i=0 #do just once for first fiber
+            
             if (steady_state):
-                term2=1-2*np.exp(-1.0*TIs[h]/params[2*i])+np.exp(-1.0*TR/params[2*i])
+                term2=1-2*np.exp(-1.0*TIs[h]/params[0])+np.exp(-1.0*TR/params[0])
             else:
-                term2=1-2*np.exp(-1.0*TIs[h]/params[2*i])
+                term2=1-2*np.exp(-1.0*TIs[h]/params[0])
             eq[h]+=term2                          
         
         
@@ -663,6 +685,8 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
         else:
             if (set_Dpar_equal):
                 sig[h]=sqrt((params[numfibers+2]*eq[h])**2+params[numfibers+1]**2)  
+            elif (just_b0):
+                sig[h]=sqrt((params[numfibers+1]*eq[h])**2+params[numfibers]**2)  
             else:
                 sig[h]=sqrt((params[2*numfibers+1]*eq[h])**2+params[2*numfibers]**2)         
             out[h]=sig[h]-obs[h]  
