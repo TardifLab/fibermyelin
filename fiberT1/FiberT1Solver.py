@@ -47,7 +47,7 @@ fix_D_phantom3=False
 
 
 global set_Dpar_equal
-set_Dpar_equal=True#have to set here and in calling script
+set_Dpar_equal=False#have to set here and in calling script
 
 if (just_b0):
     set_Dpar_equal=False #has to be for code structure and Dpar is irrelevant

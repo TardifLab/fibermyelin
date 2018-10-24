@@ -31,7 +31,7 @@ global sagittal
 sagittal=False
 
 global set_Dpar_equal
-set_Dpar_equal=True #have to set in other file too
+set_Dpar_equal=False #have to set in other file too
 
 global bedpostx
 bedpostx=False
