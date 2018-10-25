@@ -40,9 +40,9 @@ bedpostx=False
 #asparagus 500-800,1500
 #human brain 550-575-600,725-750
 global vis_min
-vis_min=400
+vis_min=600
 global vis_max
-vis_max=575
+vis_max=800
 global vis_range
 vis_range=vis_max-vis_min
 
@@ -137,11 +137,13 @@ myargs = parser.parse_args()
 #then, **flip in x, using fix_IRdiff_sag.py** OR just set strides to -3,1,2,4
 #I think this is because of something in Ilana's unshuffling script, and we could change that and not flip here 
 
-#do same to mask and vic as to files that match it (first 3 dims)
-#e.g., for axial, I needed to set strides of the NODDI output to 1,2,3 
+#do same to mask as to files that match it (first 3 dims)
+#e.g., for axial, I needed to set strides to 1,2,3 
 #for sagittal, 3,1,2
 
-
+#NB!! NODDI processing erases the strides.  So, what I did was resample the file, reversing the negative stride direction (x)
+#it might work to use strides -1,2,3, but I haven't tested it.
+#I used script fix_NODDI_trans
 
 if (myargs.visualize or myargs.sortT1):
     T1_array=nib.load(myargs.t1_image_filename[0]).get_data()
@@ -341,6 +343,7 @@ if not (myargs.visualize or myargs.sortT1):
                     print('T1: %d' % T1s[i])
                     print('Dpar: %f' % Dparfit[i])
                 T1_array[voxels[0][j],voxels[1][j],voxels[2][j],i]=T1s[i]
+                
                 Dparfit_array[voxels[0][j],voxels[1][j],voxels[2][j],i]=Dparfit[i]
         
         #optional: this plots the single voxel right now:
