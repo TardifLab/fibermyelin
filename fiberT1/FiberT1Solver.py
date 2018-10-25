@@ -31,10 +31,10 @@ sim_noise_level=8 #comparable to actual noise mean
 #if True, see hardcoded vic value in IRDiffEq function.
 #0.4: lower than healthy, but a better fit near the noise floor
 #I recommend actually computing it instead
-#actual values are ~0.6 in human..
+#actual values are ~0.4-0.6 in human..
 #0.4 seems a better fit in marm
 global fix_vic 
-fix_vic=True
+fix_vic=False
 global fixed_vic
 fixed_vic=0.6
 
