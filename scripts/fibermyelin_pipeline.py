@@ -249,10 +249,10 @@ if not (myargs.visualize or myargs.sortT1):
     bvals, bvecs = read_bvals_bvecs(myargs.bvals_filename[0],myargs.bvecs_filename[0])
     grad_table = gradient_table(bvals, bvecs)
     
-    #the bvecs are in strided voxel space, so we negate here    
+    #the bvecs are in strided voxel space, so we negate here  x (2) and y (0)  
     if (sagittal): #DO: check this again
         grad_table.bvecs[:,0]=-1.0*grad_table.bvecs[:,0]
-        grad_table.bvecs[:,1]=-1.0*grad_table.bvecs[:,1]
+        grad_table.bvecs[:,2]=-1.0*grad_table.bvecs[:,2]
     else: #axial (even if prone)
         grad_table.bvecs[:,0]=-1.0*grad_table.bvecs[:,0]
     #print grad_table.bvecs[:,0]
