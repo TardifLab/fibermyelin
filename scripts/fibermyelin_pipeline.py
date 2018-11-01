@@ -28,7 +28,7 @@ EPSILON=9E-9
 
 #file orientation (if False, assumes axial)
 global sagittal 
-sagittal=True
+sagittal=False
 
 global set_Dpar_equal
 set_Dpar_equal=False #have to set in other file too
@@ -43,9 +43,9 @@ just_b0=False #have to set in other file too
 #asparagus 500-800,1500
 #human brain 550-575-600,725-750-800
 global vis_min
-vis_min=500
+vis_min=650
 global vis_max
-vis_max=1500
+vis_max=750
 global vis_range
 vis_range=vis_max-vis_min
 
