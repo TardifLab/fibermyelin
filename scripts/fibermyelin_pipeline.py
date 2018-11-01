@@ -28,7 +28,7 @@ EPSILON=9E-9
 
 #file orientation (if False, assumes axial)
 global sagittal 
-sagittal=False
+sagittal=True
 
 global set_Dpar_equal
 set_Dpar_equal=False #have to set in other file too
@@ -37,15 +37,15 @@ global bedpostx
 bedpostx=False
 
 global just_b0
-just_b=False #have to set in other file too
+just_b0=False #have to set in other file too
 
 #for visualization W/L:
 #asparagus 500-800,1500
 #human brain 550-575-600,725-750-800
 global vis_min
-vis_min=650
+vis_min=500
 global vis_max
-vis_max=750
+vis_max=1500
 global vis_range
 vis_range=vis_max-vis_min
 
@@ -250,9 +250,9 @@ if not (myargs.visualize or myargs.sortT1):
     grad_table = gradient_table(bvals, bvecs)
     
     #the bvecs are in strided voxel space, so we negate here    
-    if (sagittal):
+    if (sagittal): #DO: check this again
         grad_table.bvecs[:,0]=-1.0*grad_table.bvecs[:,0]
-        grad_table.bvecs[:,2]=-1.0*grad_table.bvecs[:,2]
+        grad_table.bvecs[:,1]=-1.0*grad_table.bvecs[:,1]
     else: #axial (even if prone)
         grad_table.bvecs[:,0]=-1.0*grad_table.bvecs[:,0]
     #print grad_table.bvecs[:,0]
