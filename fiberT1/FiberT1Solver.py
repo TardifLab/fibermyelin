@@ -21,7 +21,7 @@ import random
 global plot_fit
 plot_fit=False
 global just_b0
-just_b0=False #have to set here and in calling script
+just_b0=True #have to set here and in calling script
 global simulate
 simulate=False
 global sim_noise_level

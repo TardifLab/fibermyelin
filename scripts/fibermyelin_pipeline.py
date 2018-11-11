@@ -37,7 +37,7 @@ global bedpostx
 bedpostx=False
 
 global just_b0
-just_b0=False #have to set in other file too
+just_b0=True #have to set in other file too
 
 #for visualization W/L:
 #asparagus 500-800,1500
@@ -148,7 +148,7 @@ myargs = parser.parse_args()
 #it might work to use strides -1,2,3, but I haven't tested it.
 #I used script fix_NODDI_trans
 
-if (myargs.visualize or myargs.sortT1):
+if (myargs.visualize or myargs.sortT1 or myargs.output_fixel):
     T1_array=nib.load(myargs.t1_image_filename[0]).get_data()
 else:
     IR_diff_img=nib.load(myargs.IR_diff_image_filename[0])
@@ -222,7 +222,7 @@ if (bedpostx):
             fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*l+2]=fiber_dirs_img_fsl[l].get_data()[voxels[0][j],voxels[1][j],voxels[2][j],2]
         number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]=max_fibers
         
-if not (myargs.visualize or myargs.sortT1):    
+if not (myargs.visualize or myargs.sortT1 or myargs.output_fixel):    
     
   
     number_of_slices=0
@@ -367,90 +367,88 @@ if not (myargs.visualize or myargs.sortT1):
     else:    
         nib.save(Dparfit_img, myargs.Dpar_image_filename[0])
     
+ 
+#maybe this until the output_fixel if should be inside that if, but it does no harm here   
+        
+T1_array_zeroed=np.zeros(AFD_img.header.get_data_shape()) 
+
+for j in range(len(voxels[0])):  
+    counter=0
+    for l in range(max_fibers): 
+                         
+        if AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]>AFD_thresh:            
+            T1_array_zeroed[voxels[0][j],voxels[1][j],voxels[2][j],l]=T1_array[voxels[0][j],voxels[1][j],voxels[2][j],counter]
+            counter+=1
+        else:
+            T1_array_zeroed[voxels[0][j],voxels[1][j],voxels[2][j],l]=0.0
+          
+if (False):   
+    #output the T1s to match the directions initially input:
+    #the intent is to then use voxel2fixel, but it fails.  It writes the first T1 to all fixels.
+    T1_img_zeroed = nib.Nifti1Image(T1_array_zeroed, AFD_img.affine, AFD_img.header)
+    nib.save(T1_img_zeroed, "t1_zeroed.nii")   
+     
     
-        
-    T1_array_zeroed=np.zeros(AFD_img.header.get_data_shape()) #NB: if you want to output fixel data without redoing the fitting, unindent from here to Visualization and use -vis
     
-    for j in range(len(voxels[0])):  
-        counter=0
-        for l in range(max_fibers): 
-                             
-            if AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]>AFD_thresh:            
-                T1_array_zeroed[voxels[0][j],voxels[1][j],voxels[2][j],l]=T1_array[voxels[0][j],voxels[1][j],voxels[2][j],counter]
-                counter+=1
-            else:
-                T1_array_zeroed[voxels[0][j],voxels[1][j],voxels[2][j],l]=0.0
-              
-    if (False):   
-        #output the T1s to match the directions initially input:
-        #the intent is to then use voxel2fixel, but it fails.  It writes the first T1 to all fixels.
-        T1_img_zeroed = nib.Nifti1Image(T1_array_zeroed, AFD_img.affine, AFD_img.header)
-        nib.save(T1_img_zeroed, "t1_zeroed.nii")   
-         
+if (myargs.output_fixel): 
+   
+#output the directions, t1, and index files in sparse format. 
+#I'm doing this for the thresholded data
+#index is the size of AFD, first frame
+    
+     
+    new_size=[AFD_img.header.get_data_shape()[0],AFD_img.header.get_data_shape()[1], AFD_img.header.get_data_shape()[2],2]
+    
+    index_array=np.zeros(new_size)
+    
+    #temporarily make these as enormous as possible:
     
     
-    if (myargs.output_fixel): 
-       
-    #output the directions, t1, and index files in sparse format. 
-    #I'm doing this for the thresholded data
-    #index is the size of AFD, first frame
-        
-         
-        new_size=[AFD_img.header.get_data_shape()[0],AFD_img.header.get_data_shape()[1], AFD_img.header.get_data_shape()[2],2]
-        
-        index_array=np.zeros(new_size)
-        
-        #temporarily make these as enormous as possible:
-        
-        
-        thresh_dirs_array=np.zeros([AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2],3,1])
-        
-        t1_fixel_array=np.zeros([AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2],1,1])
-        
-        counter=0
-        #for i in range(AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2])
-        for i in range(len(voxels[0])):#for just the mask
-            fibercounter=0
-            for l in range(max_fibers):   
-                            
-                if AFD_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],l]>AFD_thresh: 
-                    if (index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]==0):#set on first fiber
+    thresh_dirs_array=np.zeros([AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2],3,1])
+    
+    t1_fixel_array=np.zeros([AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2],1,1])
+    
+    counter=0
+    #for i in range(AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2])
+    for i in range(len(voxels[0])):#for just the mask
+        fibercounter=0
+        for l in range(max_fibers):   
                         
-                        index_array[voxels[0][i],voxels[1][i],voxels[2][i],1]=counter
-                    thresh_dirs_array[counter,0,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l]
-                    thresh_dirs_array[counter,1,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+1]
-                    thresh_dirs_array[counter,2,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+2]
-                    t1_fixel_array[counter,0,0]=T1_array_zeroed[voxels[0][i],voxels[1][i],voxels[2][i],l]
+            if AFD_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],l]>AFD_thresh: 
+                if (index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]==0):#set on first fiber
                     
-                    counter+=1
-                    fibercounter+=1
-                    index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]=fibercounter
-                    
-             
-        if not os.path.exists("t1_fixel_dir"):
-            os.makedirs("t1_fixel_dir")
-                   
-        index_img = nib.Nifti1Image(index_array,AFD_img.affine)
-        
-        
-        nib.save(index_img, "t1_fixel_dir/index.nii")
-        
-        
-        
-        thresh_dirs_img=nib.Nifti1Image(thresh_dirs_array[0:counter,0:3,0],AFD_img.affine)
-        
-        
-        nib.save(thresh_dirs_img, "t1_fixel_dir/directions.nii") 
-        
-        #DO: why on earth does this image end up size counterx3x1?? I am correcting it with fslroi
-        t1_fixel_img=nib.Nifti1Image(t1_fixel_array[0:counter,0,0],AFD_img.affine) 
-        
-        
-        nib.save(thresh_dirs_img, "t1_fixel_dir/t1_fixel_1.nii") 
-        mycommand="fslroi t1_fixel_dir/t1_fixel_1.nii t1_fixel_dir/t1_fixel.nii 0 %d 0 1 0 1" % counter 
-        
-        os.system(mycommand)
-        os.system("rm -f t1_fixel_dir/t1_fixel_1.nii")
+                    index_array[voxels[0][i],voxels[1][i],voxels[2][i],1]=counter
+                thresh_dirs_array[counter,0,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l]
+                thresh_dirs_array[counter,1,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+1]
+                thresh_dirs_array[counter,2,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+2]
+                t1_fixel_array[counter,0,0]=T1_array_zeroed[voxels[0][i],voxels[1][i],voxels[2][i],l]
+                
+                counter+=1
+                fibercounter+=1
+                index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]=fibercounter
+                
+         
+    if not os.path.exists("t1_fixel_dir"):
+        os.makedirs("t1_fixel_dir")
+               
+    index_img = nib.Nifti1Image(index_array,AFD_img.affine)
+    
+    
+    nib.save(index_img, "t1_fixel_dir/index.nii")
+    
+    
+    
+    thresh_dirs_img=nib.Nifti1Image(thresh_dirs_array[0:counter,0:3,0],AFD_img.affine)
+    
+    
+    nib.save(thresh_dirs_img, "t1_fixel_dir/directions.nii") 
+    
+    
+    t1_fixel_img=nib.Nifti1Image(t1_fixel_array[0:counter,0,0],AFD_img.affine) 
+    
+    
+    nib.save(t1_fixel_img, "t1_fixel_dir/t1_fixel.nii") 
+    
         
 #Visualize: 
 #the visualization is done in voxel space == world space for no angulation and isotropic steps and therefore only looks correct for isotropic voxels (and a right handed coordinate system, which nifti is.)
@@ -492,7 +490,7 @@ if (myargs.sortT1): #sort T1s for other analysis:
                     
     else: #axial. currently coded for x&y             
         print("\n\nCrossing fiber T1s:\n")
-        print("~x                   ~z\n")
+        print("~x                   ~y\n")
         for j in range(len(voxels[0])):  
             if (number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]==2): #if two fibers
                 if (fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],0]>fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],1]): #more along x than y      
@@ -629,5 +627,73 @@ if (myargs.visualize):
     _colourbar.SetNumberOfLabels(0)
     _renderer.AddActor2D(_colourbar)
     
+
+    #show 3 orth planes of anatomical:
+#this is totally unfinished, starting at HERE
+#mrview seems to be OK for most of our needs
+    
+    #just read in with nibabel and put in vtk polydata as in mincdiffusion
+#    underlay_img=nib.load("dcm2nii/20181009_130402MP2RAGE1mms003a1001_strides123.nii")
+#    underlay_image_data_vtk=vtk.vtkImageData()
+#    #HERE need mapping from corner of anatomical underlay to the corner of voxel space of T1
+#    #same mapping for spacing (setting 0.5)
+#    underlay_image_data_vtk.SetOrigin(0,0,0)
+#    underlay_image_data_vtk.
+#      _image_data_vtk->SetSpacing((double)image_data->GetXStep(),(double)image_data->GetYStep(),(double)image_data->GetZStep());
+#      _image_data_vtk->SetDimensions(image_data->GetXSize(),image_data->GetYSize(),image_data->GetZSize());
+#      _image_data_vtk->SetScalarTypeToFloat();//CLAUDE this fixes seg fault!!!!!!!
+#    
+#      // should keep a pointer of this for float_array->Delete();   // CLAUDE
+#      vtkFloatArray *float_array=vtkFloatArray::New();
+#      /*float_array->Allocate( image_data->GetXSize() * image_data->GetYSize() *
+#		             image_data->GetZSize() );   // CLAUDE*/
+#      
+#
+#      for(x=0;x<image_data->GetXSize();x++)
+#	{
+#	  for(y=0;y<image_data->GetYSize();y++) 
+#	    { 
+#	      for(z=0;z<image_data->GetZSize();z++) 
+#		{
+#	
+#		  ijk[0]=x;
+#		  ijk[1]=y;
+#		  ijk[2]=z;
+#
+#		  float_array->InsertValue(_image_data_vtk->ComputePointId(ijk),image_data->GetValue(x,y,z));
+#
+#		  
+#		}
+#	    }
+#	}
+#      
+#      _image_data_vtk->GetPointData()->SetScalars(float_array);
+#    
+# 
+# 
+#    picker = vtk.vtkCellPicker()
+#   
+#    
+# 
+#    image_plane_widgets_x=vtk.vtkImagePlaneWidget()
+#    image_plane_widgets_x.SetInput(reader.GetOutput())
+#    image_plane_widgets_x.DisplayTextOn()
+#    image_plane_widgets_x.RestrictPlaneToVolumeOn()
+#    image_plane_widgets_x.SetPlaneOrientationToXAxes()
+#    image_plane_widgets_x.SetSliceIndex(reader.GetOutput().GetCenter()[0])
+# 	  
+#     #image_plane_widgets_x.SetLookupTable(add a lut)
+# 	
+#    image_plane_widgets_x.SetPicker(picker)
+#     
+#    image_plane_widgets_x.SetInteractor(_renderwindowinteractor)      
+#    image_plane_widgets_x.On()
+#    
+#    
+       
     _renderer.Render()
+
     _renderwindowinteractor.Start()
+    
+
+    
