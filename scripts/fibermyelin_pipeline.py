@@ -37,7 +37,7 @@ global bedpostx
 bedpostx=False
 
 global just_b0
-just_b0=True #have to set in other file too
+just_b0=False #have to set in other file too
 
 #for visualization W/L:
 #asparagus 500-800,1500
