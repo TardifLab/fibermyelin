@@ -9,3 +9,4 @@ Q3 can we incorporate a myelin estimate in NODDI to improve vic estimate?
  
 Q4 can we use CHARMED (have the data)? using vic assumes same intra:extra-axonal volume fraction for each fiber.  Could potentially fix the entire tensor for each fiber using CHARMED
 
+Q5 what is our angular resolution? Could we do a simulation based quantitative analysis of this?
