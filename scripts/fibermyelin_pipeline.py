@@ -368,86 +368,85 @@ if not (myargs.visualize or myargs.sortT1):
         nib.save(Dparfit_img, myargs.Dpar_image_filename[0])
     
  
-#maybe this until the output_fixel if should be inside that if, but it does no harm here   
+            
+    T1_array_zeroed=np.zeros(AFD_img.header.get_data_shape()) 
+    
+    for j in range(len(voxels[0])):  
+        counter=0
+        for l in range(max_fibers): 
+                             
+            if AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]>AFD_thresh:            
+                T1_array_zeroed[voxels[0][j],voxels[1][j],voxels[2][j],l]=T1_array[voxels[0][j],voxels[1][j],voxels[2][j],counter]
+                counter+=1
+            else:
+                T1_array_zeroed[voxels[0][j],voxels[1][j],voxels[2][j],l]=0.0
+              
+    if (False):   
+        #output the T1s to match the directions initially input:
+        #the intent is to then use voxel2fixel, but it fails.  It writes the first T1 to all fixels.
+        T1_img_zeroed = nib.Nifti1Image(T1_array_zeroed, AFD_img.affine, AFD_img.header)
+        nib.save(T1_img_zeroed, "t1_zeroed.nii")   
+         
         
-T1_array_zeroed=np.zeros(AFD_img.header.get_data_shape()) 
-
-for j in range(len(voxels[0])):  
+        
+    
+       
+    #output the directions, t1, and index files in sparse format. 
+    #I'm doing this for the thresholded data
+    #index is the size of AFD, first frame
+        
+         
+    new_size=[AFD_img.header.get_data_shape()[0],AFD_img.header.get_data_shape()[1], AFD_img.header.get_data_shape()[2],2]
+    
+    index_array=np.zeros(new_size)
+    
+    #temporarily make these as enormous as possible:
+    
+    
+    thresh_dirs_array=np.zeros([AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2],3,1])
+    
+    t1_fixel_array=np.zeros([AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2],1,1])
+    
     counter=0
-    for l in range(max_fibers): 
-                         
-        if AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]>AFD_thresh:            
-            T1_array_zeroed[voxels[0][j],voxels[1][j],voxels[2][j],l]=T1_array[voxels[0][j],voxels[1][j],voxels[2][j],counter]
-            counter+=1
-        else:
-            T1_array_zeroed[voxels[0][j],voxels[1][j],voxels[2][j],l]=0.0
-          
-if (False):   
-    #output the T1s to match the directions initially input:
-    #the intent is to then use voxel2fixel, but it fails.  It writes the first T1 to all fixels.
-    T1_img_zeroed = nib.Nifti1Image(T1_array_zeroed, AFD_img.affine, AFD_img.header)
-    nib.save(T1_img_zeroed, "t1_zeroed.nii")   
-     
-    
-    
-
-   
-#output the directions, t1, and index files in sparse format. 
-#I'm doing this for the thresholded data
-#index is the size of AFD, first frame
-    
-     
-new_size=[AFD_img.header.get_data_shape()[0],AFD_img.header.get_data_shape()[1], AFD_img.header.get_data_shape()[2],2]
-
-index_array=np.zeros(new_size)
-
-#temporarily make these as enormous as possible:
-
-
-thresh_dirs_array=np.zeros([AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2],3,1])
-
-t1_fixel_array=np.zeros([AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2],1,1])
-
-counter=0
-#for i in range(AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2])
-for i in range(len(voxels[0])):#for just the mask
-    fibercounter=0
-    for l in range(max_fibers):   
+    #for i in range(AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2])
+    for i in range(len(voxels[0])):#for just the mask
+        fibercounter=0
+        for l in range(max_fibers):   
+                        
+            if AFD_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],l]>AFD_thresh: 
+                if (index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]==0):#set on first fiber
                     
-        if AFD_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],l]>AFD_thresh: 
-            if (index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]==0):#set on first fiber
+                    index_array[voxels[0][i],voxels[1][i],voxels[2][i],1]=counter
+                thresh_dirs_array[counter,0,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l]
+                thresh_dirs_array[counter,1,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+1]
+                thresh_dirs_array[counter,2,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+2]
+                t1_fixel_array[counter,0,0]=T1_array_zeroed[voxels[0][i],voxels[1][i],voxels[2][i],l]
                 
-                index_array[voxels[0][i],voxels[1][i],voxels[2][i],1]=counter
-            thresh_dirs_array[counter,0,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l]
-            thresh_dirs_array[counter,1,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+1]
-            thresh_dirs_array[counter,2,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+2]
-            t1_fixel_array[counter,0,0]=T1_array_zeroed[voxels[0][i],voxels[1][i],voxels[2][i],l]
-            
-            counter+=1
-            fibercounter+=1
-            index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]=fibercounter
-            
-     
-if not os.path.exists(myargs.fixel_dir_name[0]):
-    os.makedirs(myargs.fixel_dir_name[0])
-           
-index_img = nib.Nifti1Image(index_array,AFD_img.affine)
-
-
-nib.save(index_img, myargs.fixel_dir_name[0]+"/index.nii")
-
-
-
-thresh_dirs_img=nib.Nifti1Image(thresh_dirs_array[0:counter,0:3,0],AFD_img.affine)
-
-
-nib.save(thresh_dirs_img, myargs.fixel_dir_name[0]+"/directions.nii") 
-
-
-t1_fixel_img=nib.Nifti1Image(t1_fixel_array[0:counter,0,0],AFD_img.affine) 
-
-
-nib.save(t1_fixel_img, myargs.fixel_dir_name[0]+"/t1_fixel.nii") 
+                counter+=1
+                fibercounter+=1
+                index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]=fibercounter
+                
+         
+    if not os.path.exists(myargs.fixel_dir_name[0]):
+        os.makedirs(myargs.fixel_dir_name[0])
+               
+    index_img = nib.Nifti1Image(index_array,AFD_img.affine)
+    
+    
+    nib.save(index_img, myargs.fixel_dir_name[0]+"/index.nii")
+    
+    
+    
+    thresh_dirs_img=nib.Nifti1Image(thresh_dirs_array[0:counter,0:3,0],AFD_img.affine)
+    
+    
+    nib.save(thresh_dirs_img, myargs.fixel_dir_name[0]+"/directions.nii") 
+    
+    
+    t1_fixel_img=nib.Nifti1Image(t1_fixel_array[0:counter,0,0],AFD_img.affine) 
+    
+    
+    nib.save(t1_fixel_img, myargs.fixel_dir_name[0]+"/t1_fixel.nii") 
 
     
 #Visualize: 
@@ -512,7 +511,7 @@ if (myargs.sortT1): #sort T1s for other analysis:
         print("\n~y                   \n")  
         for j in range(len(voxels[0])):         
             if (number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]==1): #single fiber      
-                if (fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],0]<=fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],1]): #z
+                if (fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],0]<=fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],1]): #y
                     print("%f" % float(T1_array[voxels[0][j],voxels[1][j],voxels[2][j],0]))
 
 
