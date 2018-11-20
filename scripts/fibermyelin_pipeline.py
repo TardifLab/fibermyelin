@@ -52,9 +52,7 @@ vis_range=vis_max-vis_min
 
 #end hardcoded stuff
 
-global output_fixel
-output_fixel=False #default; I don't think I need to set this; will default to False anyway.
-                    #we might want to always have this be true
+
 
 print('This a script to process IR-diffusion data\n\
 NB: it does not currently handle data acquired with angulation\n\
@@ -74,8 +72,10 @@ NB: initial parameter values are hardcoded in FiberT1Solver::GetT1s,\n\
     Upper and lower bounds are also hardcoded\n\
     Comment/uncomment appropriate lines to change fitting algorithm and fitting options.\n\
 NB: the b=0 images are currently weighted significantly more than the rest.\n\
-NB: future additions that aren\'t here: CSF compartment, GM compartment')
+NB: future additions that aren\'t here: CSF compartment, GM compartment\n\
+NB: the fixel directory output is mandatory and only works properly for axial images.')
 
+#DO: add fixel directories or other output format for thresholded AFDs (and possibly Dpar)
 
 parser = argparse.ArgumentParser(description='')
 
@@ -85,7 +85,7 @@ parser.add_argument('-t1', dest='t1_image_filename', help='T1 filename: output f
 parser.add_argument('-Dpar', dest='Dpar_image_filename', help='D_parallel filename', required=False, nargs=1)
 parser.add_argument('-mask', dest='mask_image_filename', help='mask filename, for computation or visualization. If for visualization, must be the same mask previously used for computation', required=True, nargs=1)
 parser.add_argument('-vic', dest='vic_image_filename', help='vic filename, for computation only.', required=False, nargs=1)
-parser.add_argument('-fixel',dest='output_fixel', help='output fixel format T1 in a directory called t1_fixel_dir; will overwrite anything that is there already, and is currently implemented only for axial images', required=False, action='store_true')
+parser.add_argument('-fixel',dest='fixel_dir_name', help='T1 fixel directory name; currently implemented only for axial images!!', required=True, nargs=1)
 #not doing this here, assume user took care of it, then we input fixel2voxel-ed version:
 #parser.add_argument('-fixel', dest='fixel_dirname', help='fixel directory from mrtrix, must contain directions.mif, afd.mif, index.mif', required=True, nargs=1)              
 parser.add_argument('-afd', dest='afd_image_filename', help='AFD filename, currently required even for -vis', required=True, nargs=1)
@@ -148,7 +148,7 @@ myargs = parser.parse_args()
 #it might work to use strides -1,2,3, but I haven't tested it.
 #I used script fix_NODDI_trans
 
-if (myargs.visualize or myargs.sortT1 or myargs.output_fixel):
+if (myargs.visualize or myargs.sortT1):
     T1_array=nib.load(myargs.t1_image_filename[0]).get_data()
 else:
     IR_diff_img=nib.load(myargs.IR_diff_image_filename[0])
@@ -222,7 +222,7 @@ if (bedpostx):
             fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*l+2]=fiber_dirs_img_fsl[l].get_data()[voxels[0][j],voxels[1][j],voxels[2][j],2]
         number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]=max_fibers
         
-if not (myargs.visualize or myargs.sortT1 or myargs.output_fixel):    
+if not (myargs.visualize or myargs.sortT1):    
     
   
     number_of_slices=0
@@ -390,66 +390,66 @@ if (False):
      
     
     
-if (myargs.output_fixel): 
+
    
 #output the directions, t1, and index files in sparse format. 
 #I'm doing this for the thresholded data
 #index is the size of AFD, first frame
     
      
-    new_size=[AFD_img.header.get_data_shape()[0],AFD_img.header.get_data_shape()[1], AFD_img.header.get_data_shape()[2],2]
-    
-    index_array=np.zeros(new_size)
-    
-    #temporarily make these as enormous as possible:
-    
-    
-    thresh_dirs_array=np.zeros([AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2],3,1])
-    
-    t1_fixel_array=np.zeros([AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2],1,1])
-    
-    counter=0
-    #for i in range(AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2])
-    for i in range(len(voxels[0])):#for just the mask
-        fibercounter=0
-        for l in range(max_fibers):   
-                        
-            if AFD_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],l]>AFD_thresh: 
-                if (index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]==0):#set on first fiber
+new_size=[AFD_img.header.get_data_shape()[0],AFD_img.header.get_data_shape()[1], AFD_img.header.get_data_shape()[2],2]
+
+index_array=np.zeros(new_size)
+
+#temporarily make these as enormous as possible:
+
+
+thresh_dirs_array=np.zeros([AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2],3,1])
+
+t1_fixel_array=np.zeros([AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2],1,1])
+
+counter=0
+#for i in range(AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2])
+for i in range(len(voxels[0])):#for just the mask
+    fibercounter=0
+    for l in range(max_fibers):   
                     
-                    index_array[voxels[0][i],voxels[1][i],voxels[2][i],1]=counter
-                thresh_dirs_array[counter,0,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l]
-                thresh_dirs_array[counter,1,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+1]
-                thresh_dirs_array[counter,2,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+2]
-                t1_fixel_array[counter,0,0]=T1_array_zeroed[voxels[0][i],voxels[1][i],voxels[2][i],l]
+        if AFD_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],l]>AFD_thresh: 
+            if (index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]==0):#set on first fiber
                 
-                counter+=1
-                fibercounter+=1
-                index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]=fibercounter
-                
-         
-    if not os.path.exists("t1_fixel_dir"):
-        os.makedirs("t1_fixel_dir")
-               
-    index_img = nib.Nifti1Image(index_array,AFD_img.affine)
+                index_array[voxels[0][i],voxels[1][i],voxels[2][i],1]=counter
+            thresh_dirs_array[counter,0,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l]
+            thresh_dirs_array[counter,1,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+1]
+            thresh_dirs_array[counter,2,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+2]
+            t1_fixel_array[counter,0,0]=T1_array_zeroed[voxels[0][i],voxels[1][i],voxels[2][i],l]
+            
+            counter+=1
+            fibercounter+=1
+            index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]=fibercounter
+            
+     
+if not os.path.exists(myargs.fixel_dir_name[0]):
+    os.makedirs(myargs.fixel_dir_name[0])
+           
+index_img = nib.Nifti1Image(index_array,AFD_img.affine)
+
+
+nib.save(index_img, myargs.fixel_dir_name[0]+"/index.nii")
+
+
+
+thresh_dirs_img=nib.Nifti1Image(thresh_dirs_array[0:counter,0:3,0],AFD_img.affine)
+
+
+nib.save(thresh_dirs_img, myargs.fixel_dir_name[0]+"/directions.nii") 
+
+
+t1_fixel_img=nib.Nifti1Image(t1_fixel_array[0:counter,0,0],AFD_img.affine) 
+
+
+nib.save(t1_fixel_img, myargs.fixel_dir_name[0]+"/t1_fixel.nii") 
+
     
-    
-    nib.save(index_img, "t1_fixel_dir/index.nii")
-    
-    
-    
-    thresh_dirs_img=nib.Nifti1Image(thresh_dirs_array[0:counter,0:3,0],AFD_img.affine)
-    
-    
-    nib.save(thresh_dirs_img, "t1_fixel_dir/directions.nii") 
-    
-    
-    t1_fixel_img=nib.Nifti1Image(t1_fixel_array[0:counter,0,0],AFD_img.affine) 
-    
-    
-    nib.save(t1_fixel_img, "t1_fixel_dir/t1_fixel.nii") 
-    
-        
 #Visualize: 
 #the visualization is done in voxel space == world space for no angulation and isotropic steps and therefore only looks correct for isotropic voxels (and a right handed coordinate system, which nifti is.)
 #color code by T1
