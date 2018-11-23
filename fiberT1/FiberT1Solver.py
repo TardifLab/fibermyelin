@@ -55,7 +55,7 @@ if (just_b0):
 
 #import scipy
 #print(scipy.__version__)
-from scipy.optimize import least_squares #least_squares #can't import? why? 
+from scipy.optimize import least_squares #least_squares 
 
 class FiberT1Solver:
     """class to compute T1 for each fiber"""
@@ -383,7 +383,9 @@ class FiberT1Solver:
         
         #print all fitted parameters:
         print(res_lsq.x)
-        print("SSE %f" % res_lsq.cost)
+                
+        
+        print("%d SSE %f" % (self.TIs[0], res_lsq.cost))
         #print args[:,4] #TIs
         #print("vic %f" % self.vic)
         
