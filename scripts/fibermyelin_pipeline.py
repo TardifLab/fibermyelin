@@ -487,12 +487,12 @@ if (myargs.sortT1): #sort T1s for other analysis:
                 if (abs(fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],0])<=abs(fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],2])): #z
                     print("%f" % float(T1_array[voxels[0][j],voxels[1][j],voxels[2][j],0]))
                     
-    else: #axial. currently coded for x&y             
+    else: #axial. currently coded for x&z             
         print("\n\nCrossing fiber T1s:\n")
-        print("~x                   ~y\n")
+        print("~x                   ~z\n")
         for j in range(len(voxels[0])):  
             if (number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]==2): #if two fibers
-                if (abs(fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],0])>abs(fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],1])): #more along x than y      
+                if (abs(fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],0])>abs(fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],2])): #more along x than z      
                     ccT1=float(T1_array[voxels[0][j],voxels[1][j],voxels[2][j],0])
                     cingT1=float(T1_array[voxels[0][j],voxels[1][j],voxels[2][j],1])
                 else:
@@ -504,14 +504,14 @@ if (myargs.sortT1): #sort T1s for other analysis:
         print("~x                   \n")  
         for j in range(len(voxels[0])):         
             if (number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]==1): #single fiber      
-                if (abs(fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],0])>abs(fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],1])): #x
+                if (abs(fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],0])>abs(fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],2])): #x
                     print("%f" % float(T1_array[voxels[0][j],voxels[1][j],voxels[2][j],0]))
                 
         
-        print("\n~y                   \n")  
+        print("\n~z                   \n")  
         for j in range(len(voxels[0])):         
             if (number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]==1): #single fiber      
-                if (abs(fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],0])<=abs(fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],1])): #y
+                if (abs(fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],0])<=abs(fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],2])): #z
                     print("%f" % float(T1_array[voxels[0][j],voxels[1][j],voxels[2][j],0]))
 
 
