@@ -37,7 +37,9 @@ global fix_vic
 fix_vic=False
 global fixed_vic
 fixed_vic=0.6
-
+global mean_field_tort
+mean_field_tort=True
+#DO: make a variable "tort" that can have different cases
 
 #this was a one-time experiment in rat spinal cord cuprizone phantom
 #if True, see below in code for hardcoded values for phantom3
@@ -47,10 +49,12 @@ fix_D_phantom3=False
 
 
 global set_Dpar_equal
-set_Dpar_equal=False#have to set here and in calling script
+set_Dpar_equal=True#have to set here and in calling script
 
 if (just_b0):
     set_Dpar_equal=False #has to be for code structure and Dpar is irrelevant
+
+
 
 
 #import scipy
@@ -622,12 +626,13 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
                         Dpar=params[2*i+1]
                     
                     
-                    #averages the intra- (0) and exa-axonal tensors to get Dperp                 
-                    Dperp_factor=(1-vic)**2 #squared because we also do weighted average with ic (Dperp==0) compartment                
-                 
-                
-                    Dperp=Dperp_factor*Dpar 
-                
+                    #averages the intra- (0) and exa-axonal tensors to get Dperp 
+                    
+                    if (mean_field_tort):
+                        #this is the low-density mean-field tortuosity approximation, and is probably incorrect for realistically tight axonal packing
+                        
+                        Dperp=-np.log((1-vic)*np.exp(-(1-vic)*Dpar*1000)+vic)/1000
+                        
                     
                       
                 D=np.zeros([3,3])
