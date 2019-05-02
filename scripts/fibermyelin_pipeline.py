@@ -441,7 +441,7 @@ if not (myargs.visualize or myargs.sortT1):
 
 		    if (just_b0):
 		        t1_fixel_array[counter,0,0]=T1_array_zeroed[voxels[0][i],voxels[1][i],voxels[2][i],0]
-			print("%d\n" % t1_fixel_array[counter,0,0])
+			#print("%d\n" % t1_fixel_array[counter,0,0])
 		    else:	
                         t1_fixel_array[counter,0,0]=T1_array_zeroed[voxels[0][i],voxels[1][i],voxels[2][i],l]
                     
