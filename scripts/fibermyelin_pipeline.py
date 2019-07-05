@@ -41,7 +41,7 @@ if (sagittal==False):
     axial=True
 
 global set_Dpar_equal
-set_Dpar_equal=True #have to set in other file too
+set_Dpar_equal=True #HERE this has to be true right now have to set in FiberT1Solver.py too
 
 global bedpostx
 bedpostx=False
@@ -55,7 +55,7 @@ just_b0=False #have to set in other file too
 global vis_min
 vis_min=500
 global vis_max
-vis_max=900
+vis_max=1000
 global vis_range
 vis_range=vis_max-vis_min
 
@@ -90,7 +90,7 @@ NB: the fixel directory output is mandatory and only works properly for axial im
 parser = argparse.ArgumentParser(description='')
 
 parser.add_argument('-mask', dest='mask_image_filename', help='input mask filename, for computation or visualization. If for visualization, must be the same mask previously used for computation', required=True, nargs=1)
-parser.add_argument('-vic', dest='vic_image_filename', help='input vic filename, for computation only.', required=False, nargs=1)
+parser.add_argument('-vic', dest='vic_image_filename', help='input vic filename, for computation only.', required=True, nargs=1)
 parser.add_argument('-afd', dest='afd_image_filename', help='input AFD filename, currently required even for -vis', required=True, nargs=1)
 parser.add_argument('-afdthresh', dest='AFD_thresh', help='input AFD threshold, required.  For -vis option, AFD threshold must be that used to compute the pre-computed T1 map', required=True, nargs=1)
 parser.add_argument('-dirs', dest='dirs_image_filename', help='input directions filename, currently required even for -vis', required=True, nargs=1)
@@ -98,7 +98,10 @@ parser.add_argument('-IRdiff', dest='IR_diff_image_filename', help='input IR dif
 parser.add_argument('-TIs', dest='TIs_filename', help='input text file of TIs for each slice; required for full computation',  required=False, nargs=1)                   
 parser.add_argument('-bvals', dest='bvals_filename', help='input text file of bvals; required for full computation',  required=False, nargs=1)                     
 parser.add_argument('-bvecs', dest='bvecs_filename', help='input text file of bvecs; required for full computation',  required=False, nargs=1)                     
-parser.add_argument('-TR', dest='TR', help='input nominal TR for short-TR steady state equation (ms)',required=False,nargs=1)
+parser.add_argument('-TR', dest='TR', help='input nominal TR for short-TR steady state equation (ms)',required=True,nargs=1)
+parser.add_argument('-TE', dest='TE', help='input nominal TE for short-TR steady state equation (ms)',required=True,nargs=1)
+parser.add_argument('-viso', dest='viso_image_filename', help='input viso filename, for computation only. Optional', required=False, nargs=1)
+parser.add_argument('-B1', dest='B1_image_filename', help='input B1 filename, for computation only. Optional', required=False, nargs=1)
 parser.add_argument('-t1', dest='t1_image_filename', help='T1 filename: output filename if doing full computation; pre-computed T1 filename if -vis option is selected', required=True, nargs=1)
 parser.add_argument('-fixel',dest='fixel_dir_name', help='output T1 fixel directory name; currently implemented only for axial images!!', required=True, nargs=1)
 parser.add_argument('-Dpar', dest='Dpar_image_filename', help='output D_parallel filename', required=False, nargs=1)              
@@ -112,10 +115,10 @@ myargs = parser.parse_args()
 #assumes already done:
 #standard registration? be careful because different slices have different TIs, etc.
 #everything has to be sampled the same way, and like the IR-diff data, i.e., that number of slices. don't change the slicing because it determines TI
-#i.e. check whether the AFD, etc. have the same smapling and fix them if not.
+#i.e. check whether the AFD, etc. have the same sampling and fix them if not.
 
-#whether or not we use the steady-state (non-infinite TR) equation is hardcoded (to True) in FiberT1Solver::IRDiffEqn\n\
-#it requires TR to be input
+#steady-state (non-infinite TR) equation is always used
+#it requires TR and TE to be input
 #however, it won't work if slices shuffled and TR short enough to matter; we are handling this with dummies.
 
 #I believe the bvecs (from dcm2nii) are in voxel space with strides -1,2,3. That is how the code is right now.
@@ -158,11 +161,13 @@ myargs = parser.parse_args()
 if (myargs.visualize or myargs.sortT1):
     T1_array=nib.load(myargs.t1_image_filename[0]).get_data()
 else:
+
     IR_diff_img = nib.Nifti2Image.from_image(nib.load(myargs.IR_diff_image_filename[0]))
     vic_img = nib.Nifti2Image.from_image(nib.load(myargs.vic_image_filename[0]))
-    #IR_diff_img=nib.load(myargs.IR_diff_image_filename[0])
-    #vic_img=nib.load(myargs.vic_image_filename[0])
-    
+    if myargs.viso_image_filename:
+        viso_img=nib.Nifti2Image.from_image(nib.load(myargs.viso_image_filename[0]))
+    if myargs.B1_image_filename:
+        B1_img=nib.Nifti2Image.from_image(nib.load(myargs.B1_image_filename[0]))
 
     
 #For visualize, sort, and full computation:  
@@ -208,7 +213,18 @@ if (bedpostx):
 
 AFD_thresh=float(myargs.AFD_thresh[0])
 
-TR=float(myargs.TR[0])    
+TR=float(myargs.TR[0])
+TE=float(myargs.TE[0])
+
+
+#HERE
+#for simulation check:
+#overwrite the second voxel with the weighted average of the first and third:
+#using 50/50 to start:
+#whole IRdiff series
+
+
+
 
 voxelcounter=0
     
@@ -294,9 +310,7 @@ if not (myargs.visualize or myargs.sortT1):
         
 
         number_of_fibers=number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]
-        print('\n number_of_fibers %i:' % number_of_fibers)
-        
-        vic=vic_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j]]
+
         
         AFD=np.zeros(number_of_fibers,float)
         fiber_dirs=np.zeros((number_of_fibers,3),float)
@@ -318,11 +332,25 @@ if not (myargs.visualize or myargs.sortT1):
         
       
         
-        
+        print('number_of_fibers %i:' % number_of_fibers)
         print(fiber_dirs)
         print("AFDs:")
         print(AFD)
-        
+
+
+        vic=vic_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j]]
+
+        if myargs.viso_image_filename:
+            viso=viso_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j]]
+            print('viso: %f' % viso)
+        else:
+            viso=0
+
+        if myargs.B1_image_filename:
+            B1=B1_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j]]
+
+        else:
+            B1=1.0
         
         IR_DWIs=np.zeros((number_of_TIs, number_of_DWIs),float)
         
@@ -347,7 +375,7 @@ if not (myargs.visualize or myargs.sortT1):
             
             #to test fixing D, we have to giev it the voxel coord
             
-            t1solver.SetInputData(fiber_dirs,AFD,IR_DWIs,TIs,grad_table,vic,TR,voxels[0][j],voxels[1][j],voxels[2][j],sagittal,set_Dpar_equal)
+            t1solver.SetInputData(fiber_dirs,AFD,IR_DWIs,TIs,grad_table,vic,TR,TE,voxels[0][j],voxels[1][j],voxels[2][j],sagittal,set_Dpar_equal,viso,B1)
             T1s=np.zeros(number_of_fibers)
             Dparfit=np.zeros(number_of_fibers)
             #T1sandDparfit=np.zeros([number_of_fibers,2])
@@ -358,7 +386,7 @@ if not (myargs.visualize or myargs.sortT1):
             number_of_fibers=1
             
         for i in range(0,number_of_fibers):
-            if (T1sandDparfit!=None):
+            if (T1sandDparfit is not None):
                 if (set_Dpar_equal):
                     T1s[i]=T1sandDparfit[i]
                     Dparfit[i]=T1sandDparfit[number_of_fibers]
@@ -369,9 +397,9 @@ if not (myargs.visualize or myargs.sortT1):
                     Dparfit[i]=T1sandDparfit[2*i+1]
                     print('T1: %d' % T1s[i])
                     print('Dpar: %f' % Dparfit[i])
-                T1_array[voxels[0][j],voxels[1][j],voxels[2][j],i]=T1s[i]
+                T1_array[voxels[0][j], voxels[1][j], voxels[2][j], i] = T1s[i]
                 
-                Dparfit_array[voxels[0][j],voxels[1][j],voxels[2][j],i]=Dparfit[i]
+                Dparfit_array[voxels[0][j], voxels[1][j], voxels[2][j], i] = Dparfit[i]
         
         #optional: this plots the single voxel right now:
         #t1solver.VisualizeFibers()
@@ -383,8 +411,9 @@ if not (myargs.visualize or myargs.sortT1):
     T1_img = nib.Nifti2Image(T1_array, AFD_img.affine, AFD_img.header)
     nib.save(T1_img, myargs.t1_image_filename[0])
 
+
     Dparfit_img = nib.Nifti2Image(Dparfit_array, AFD_img.affine, AFD_img.header)
-    if (myargs.Dpar_image_filename is None):
+    if myargs.Dpar_image_filename is None:
         nib.save(Dparfit_img, "Dpar.nii")
     else:    
         nib.save(Dparfit_img, myargs.Dpar_image_filename[0])
@@ -443,7 +472,12 @@ if not (myargs.visualize or myargs.sortT1):
                     thresh_dirs_array[counter,0,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l]
                     thresh_dirs_array[counter,1,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+1]
                     thresh_dirs_array[counter,2,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+2]
-                    t1_fixel_array[counter,0,0]=T1_array_zeroed[voxels[0][i],voxels[1][i],voxels[2][i],l]
+
+		    if (just_b0):
+		        t1_fixel_array[counter,0,0]=T1_array_zeroed[voxels[0][i],voxels[1][i],voxels[2][i],0]
+			#print("%d\n" % t1_fixel_array[counter,0,0])
+		    else:	
+                        t1_fixel_array[counter,0,0]=T1_array_zeroed[voxels[0][i],voxels[1][i],voxels[2][i],l]
                     
                     counter+=1
                     fibercounter+=1
