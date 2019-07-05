@@ -50,12 +50,20 @@ print "sort_dicom.pl $dcmdir/MR* '0018,1030' $dcmdir//\n";
 
 print "\n-----Convert the ir-diffusion and hardi to nii----------\n";
 `mkdir nii`;
-$done=`\\ls nii/*midiff*.nii.gz`; chomp($done); 
-unless (-e $done) {
+$done=`\\ls nii/*midiff*fov1*.nii.gz`; chomp($done); 
+if ($done eq "") {
 	print "dcm2nii -o nii $dcmdir/*fov1/*\n";
     `dcm2nii -o nii $dcmdir/*fov1/*` ;
+}
+$done=`\\ls nii/*midiff*fov2*.nii.gz`; chomp($done); 
+if ($done eq "") {
+    print "dcm2nii -o nii $dcmdir/*fov2/*\n";
     `dcm2nii -o nii $dcmdir/*fov2/*`;
-    #`dcm2nii -o nii $dcmdir/cmrr_mbep2d_diff_multib/*`;
+}
+$done=`\\ls nii/*cmrrmbep2d*.nii.gz`; chomp($done); 
+if ($done eq "") {
+    print "dcm2nii -o nii $dcmdir/cmrr_mbep2d_diff_multib*/*\n";
+    `dcm2nii -o nii $dcmdir/cmrr_mbep2d_diff_multib*/*`;
 }
 
 #$hardi_nii = `\\ls nii/*cmrrmbep2ddiff*.nii*`; chomp($hardi_nii);
@@ -70,12 +78,13 @@ $hardid = "hardi-analysis/";
 `mkdir $hardid` unless -e $hardid;
 $done=`\\ls hardi-analysis/dwi.mif`; chomp($done); 
 unless (-e $done) {
-    `mrconvert $dir/cmrr_mbep2d_diff_multib/ hardi-analysis/dwi.mif` ;
+    print "mrconvert $dcmdir/cmrr_mbep2d_diff_multib*/ hardi-analysis/dwi.mif\n";
+    `mrconvert $dcmdir/cmrr_mbep2d_diff_multib*/ hardi-analysis/dwi.mif` ;
 }
 
-
+chomp($dicom);
 print "------\n";
 #print "irdiff_pipeline.pl -irdiff nii/*{fov1,fov2}*.nii.gz -bvecs nii/*{fov1,fov2}*.bvec -bvals nii/*{fov1,fov2}*.bval -hardi hardi-analysis/dwi.mif -dcm $dicom > log\n\n";
-print "irdiff_pipeline.pl -irdiff nii/*{fov1,fov2}*.nii.gz -hardi hardi-analysis/dwi.mif -bvecs $hardi_bvec -bvals $hardi_bval-dcm $dicom > log\n\n";
+print "irdiff_pipeline.pl -irdiff nii/*{fov1,fov2}*.nii.gz -hardi hardi-analysis/dwi.mif -bvecs $hardi_bvec -bvals $hardi_bval -dcm $dicom > log\n\n";
 
 print "------\n";
