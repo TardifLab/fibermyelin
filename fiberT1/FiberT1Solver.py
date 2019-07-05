@@ -413,10 +413,10 @@ class FiberT1Solver:
                 for i in range(self.number_of_TIs):
                     for j in range(4):
                         plotdata[i,j]=newargs[i*self.number_of_diff_encodes+thisDWI[j],1]
-                ax.plot(range(self.number_of_TIs),plotdata[:,0], 'k--')
-                ax.plot(range(self.number_of_TIs),plotdata[:,1], 'b--')
-                ax.plot(range(self.number_of_TIs),plotdata[:,2], 'g--')
-                ax.plot(range(self.number_of_TIs),plotdata[:,3], 'r--')
+                ax.plot(self.TIs,plotdata[:,0], 'k--')
+                ax.plot(self.TIs,plotdata[:,1], 'b--')
+                ax.plot(self.TIs,plotdata[:,2], 'g--')
+                ax.plot(self.TIs,plotdata[:,3], 'r--')
                 
                 ax.set_title('All TIs, b=0 (black), ~z (blue), ~y (green), ~x (red) gradient orientations', fontsize=18)
                 
@@ -429,10 +429,10 @@ class FiberT1Solver:
                 for i in range(self.number_of_TIs):                   
                     for j in range(4):
                         plotdata[i,j]=newargs[i*self.number_of_diff_encodes+thisDWI[j],1]+pred_sig_res[i*self.number_of_diff_encodes+thisDWI[j]]
-                ax.plot(range(self.number_of_TIs),plotdata[:,0], 'k-')
-                ax.plot(range(self.number_of_TIs),plotdata[:,1], 'b-')
-                ax.plot(range(self.number_of_TIs),plotdata[:,2], 'g-')
-                ax.plot(range(self.number_of_TIs),plotdata[:,3], 'r-')
+                ax.plot(self.TIs,plotdata[:,0], 'k-')
+                ax.plot(self.TIs,plotdata[:,1], 'b-')
+                ax.plot(self.TIs,plotdata[:,2], 'g-')
+                ax.plot(self.TIs,plotdata[:,3], 'r-')
                 
                 #these vary a bit with acquisition
                 #textstr='dashed: data\nsolid: fit\n\nactual directions:\n~x=[-0.97958797216415, 0.17135678231716, 0.10509198158979]\n~y=[0.20307792723178, 0.94054549932479, -0.27227476239204]\n~z=[-0.20379328727722, 0.17156073451042, 0.96386468410492]'
