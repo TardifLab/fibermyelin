@@ -332,7 +332,7 @@ if not (myargs.visualize or myargs.sortT1):
         
       
         
-        print('number_of_fibers %i:' % number_of_fibers)
+        print('\n number_of_fibers %i:' % number_of_fibers)
         print(fiber_dirs)
         print("AFDs:")
         print(AFD)
