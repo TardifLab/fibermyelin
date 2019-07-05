@@ -35,10 +35,12 @@ USAGE
 #presets: DO: must create these from the inputs. these are currently hardcoded; links are for last thing processed
 $acq="/data_/tardiflab/ilana/midiff_mgh/acqparams.txt"; #didn't AP-PA so no distortion correction for now...
 
-# TODO: this assume IR-idff always acquired the same way, (2 b=0, 30 Siemens directions)
+# TODO: this assume IR-idff always acquired the same way, (2 b=0, 30 Siemens directions, 4 averages)
 # the bvec here has that 1st b=0 removed, have to remove it from the volume in the code, this could be done in the code
-$bvecs_ir="/data_/tardiflab/ilana/midiff_mgh/30bvecs-rmb0.txt";# 1 b=0, 30 directions, from Siemens built-in
-$bvals_ir="/data_/tardiflab/ilana/midiff_mgh/30bvals-rmb0.txt";# 1 b=0, 30 directions, b=1000
+$bvecs_ir="/data_/tardiflab/ilana/midiff_mgh/30bvecs-4avg-rmb0.txt";# 1 b=0, 30 directions, from Siemens built-in
+$bvals_ir="/data_/tardiflab/ilana/midiff_mgh/30bvals-4avg-rmb0.txt";# 1 b=0, 30 directions, b=1000
+#$bvecs_ir="/data_/tardiflab/ilana/midiff_mgh/30bvecs-8avg-rmb0.txt";# 1 b=0, 30 directions, from Siemens built-in
+#$bvals_ir="/data_/tardiflab/ilana/midiff_mgh/30bvals-8avg-rmb0.txt";# 1 b=0, 30 directions, b=1000
 
 # TODO: right now assume the HARDI is always done the same way, the 108 direction protocol from UNF
 #$scheme="/data_/tardiflab/ilana/midiff_mgh/NODDI.scheme";
@@ -111,19 +113,23 @@ print "fslroi $ufov2 ir-analysis/unshuffle_fov2-remb0.nii $numavg $totframes-$nu
 print "-------Now combine the 2 datasets-------\n";
 # we need to muck around or else it does not combine properly
 `gunzip ir-analysis/*.gz` unless -e "ir-analysis/unshuffle_fov1-remb0.nii";
-print "\ncomb_fov('ir-analysis/unshuffle_fov1-remb0.nii','ir-analysis/unshuffle_fov1-remb0.nii','TI.txt','ir-analysis/ir-diff.nii')\n";
-run_matlab("comb_fov('ir-analysis/unshuffle_fov1-remb0.nii','ir-analysis/unshuffle_fov1-remb0.nii','TI.txt','ir-analysis/ir-diff.nii')") unless -e "ir-analysis/ir-diff.nii";
+print "\ncomb_fov('ir-analysis/unshuffle_fov1-remb0.nii','ir-analysis/unshuffle_fov2-remb0.nii','TI.txt','ir-analysis/ir-diff.nii')\n";
+run_matlab("comb_fov('ir-analysis/unshuffle_fov1-remb0.nii','ir-analysis/unshuffle_fov2-remb0.nii','TI.txt','ir-analysis/ir-diff.nii')") unless -e "ir-analysis/ir-diff.nii";
 
+print "---Make sure the spacing is correct---\n";
+print "mrconvert tmp-ir-diff.nii  -vox ,,2 ir-analysis/ir-diff.nii\n";
+`mrconvert tmp-ir-diff.nii  -vox ,,2 ir-analysis/ir-diff.nii` unless -e "ir-analysis/ir-diff.nii";
 #--> fit b=0
 #fslroi ir-diff-reformat.nii b0-ir-diff.nii 0 8
 
 
-print "-----Remove the extra b=0s in the bvec bval of ir-diff-----\n";
+## TODO, right now i'm just using the hard-coded ones but that won't work if we don't have the siemens 30directions
+#print "-----Remove the extra b=0s in the bvec bval of ir-diff-----\n";
 ## open vector and bvalue files
-open(BVEC,"< $bvec") or die "can't open $bvec: $!";
-@bvecs = <BVEC>; #slurp all files, each line at an index
-open(BVAL,"< $bval") or die "can't open $bval: $!";
-@bval = <BVAL>; #slurp all files, each line at an index
+#open(BVEC,"< $bvec") or die "can't open $bvec: $!";
+#@bvecs = <BVEC>; #slurp all files, each line at an index
+#open(BVAL,"< $bval") or die "can't open $bval: $!";
+#@bval = <BVAL>; #slurp all files, each line at an index
 #we want to get rid of the 1st b=0 at the beginning of each average
 
 
@@ -156,38 +162,61 @@ print "mrconvert mask.mif noddi/brain_mask.nii\n";
 print "mrconvert  dwi_dn.mif noddi/dwi_dn.nii\n";
 `mrconvert  dwi_dn.mif noddi/dwi_dn.nii`;
 
-print "eddy_openmp --data_is_shelled --imain=noddi/dwi_dn.nii --mask=noddi/brain_mask.nii --acqp=$acq --index=$index --bvecs=../$bvecs --bvals=../$bvals --out=noddi/diff_eddy-corr\n";
-`eddy_openmp --data_is_shelled --imain=noddi/dwi_dn.nii --mask=noddi/brain_mask.nii --acqp=$acq --index=$index --bvecs=../$bvecs --bvals=../$bvals --out=noddi/diff_eddy-corr` unless -e "noddi/diff_eddy-corr.eddy_parameters";
+$eddy =0;
+if ($eddy) {
+  print "eddy_openmp --data_is_shelled --imain=noddi/dwi_dn.nii --mask=noddi/brain_mask.nii --acqp=$acq --index=$index --bvecs=../$bvecs --bvals=../$bvals --out=noddi/diff_eddy-corr\n";
+  `eddy_openmp --data_is_shelled --imain=noddi/dwi_dn.nii --mask=noddi/brain_mask.nii --acqp=$acq --index=$index --bvecs=../$bvecs --bvals=../$bvals --out=noddi/diff_eddy-corr` unless -e "noddi/diff_eddy-corr.eddy_parameters";
 
 
-#---ugggh the mrconvert flipped it upside down... grrrr
-print "fslswapdim noddi/brain_mask.nii  x -y z noddi/brain_mask-swap.nii\n";
-`fslswapdim noddi/brain_mask.nii  x -y z noddi/brain_mask-swap.nii`;
-`gunzip noddi/brain_mask-swap.nii.gz` unless -e "noddi/brain_mask-swap.nii";
-print "fslswapdim noddi/diff_eddy-corr.nii  x -y z noddi/diff_eddy-corr-swap.nii\n";
-`fslswapdim noddi/diff_eddy-corr.nii  x -y z noddi/diff_eddy-corr-swap.nii` unless -e "noddi/diff_eddy-corr-swap.nii.gz";
-`gunzip noddi/diff_eddy-corr-swap.nii.gz` unless -e "noddi/diff_eddy-corr-swap.nii";
+  #---ugggh the mrconvert flipped it upside down... grrrr
+  print "fslswapdim noddi/brain_mask.nii  x -y z noddi/brain_mask-swap.nii\n";
+  `fslswapdim noddi/brain_mask.nii  x -y z noddi/brain_mask-swap.nii`;
+  `gunzip noddi/brain_mask-swap.nii.gz` unless -e "noddi/brain_mask-swap.nii";
+  print "fslswapdim noddi/diff_eddy-corr.nii  x -y z noddi/diff_eddy-corr-swap.nii\n";
+  `fslswapdim noddi/diff_eddy-corr.nii  x -y z noddi/diff_eddy-corr-swap.nii` unless -e "noddi/diff_eddy-corr-swap.nii.gz";
+  `gunzip noddi/diff_eddy-corr-swap.nii.gz` unless -e "noddi/diff_eddy-corr-swap.nii";
 
-$eddy_nogz = "noddi/diff_eddy-corr-swap.nii";
+  $eddy_nogz = "noddi/diff_eddy-corr-swap.nii";
 
-# redo the scheme file based on modified bvecs
-print "bvecs_bvals2camino.pl -vec noddi/diff_eddy-corr.eddy_rotated_bvecs -val  ../$bvals -o NODDI.scheme\n";
-`bvecs_bvals2camino.pl -vec noddi/diff_eddy-corr.eddy_rotated_bvecs -val  ../$bvals -o NODDI.scheme`;
+  # redo the scheme file based on modified bvecs
+  print "bvecs_bvals2camino.pl -vec noddi/diff_eddy-corr.eddy_rotated_bvecs -val  ../$bvals -o NODDI.scheme\n";
+  `bvecs_bvals2camino.pl -vec noddi/diff_eddy-corr.eddy_rotated_bvecs -val  ../$bvals -o NODDI.scheme`;
 
-print "AMICO_process('./','','$eddy_nogz','noddi/brain_mask-swap.nii','NODDI.scheme')\n";
-run_matlab("AMICO_process('./','','$eddy_nogz','noddi/brain_mask-swap.nii','NODDI.scheme')") unless -e "AMICO/NODDI/FIT_ICVF.nii";
+  print "AMICO_process('./','','$eddy_nogz','noddi/brain_mask-swap.nii','NODDI.scheme')\n";
+  run_matlab("AMICO_process('./','','$eddy_nogz','noddi/brain_mask-swap.nii','NODDI.scheme')") unless -e "AMICO/NODDI/FIT_ICVF.nii";
 
-###### mrtrix processing
-print "\n-----Fiber orientation/AFD processing (mrtrix)-------\n";
-# use the denoised, eddy-corrected output as input to this step
-print "mrconvert -fslgrad noddi/diff_eddy-corr.eddy_rotated_bvecs ../$bvals  $eddy_nogz  dwi_dn_ed.mif\n";
-`mrconvert -fslgrad noddi/diff_eddy-corr.eddy_rotated_bvecs ../$bvals $eddy_nogz dwi_dn_ed.mif`;
+  ###### mrtrix processing
+  print "\n-----Fiber orientation/AFD processing (mrtrix)-------\n";
+  # use the denoised, eddy-corrected output as input to this step
+  print "mrconvert -fslgrad noddi/diff_eddy-corr.eddy_rotated_bvecs ../$bvals  $eddy_nogz  dwi_dn_ed.mif\n";
+  `mrconvert -fslgrad noddi/diff_eddy-corr.eddy_rotated_bvecs ../$bvals $eddy_nogz dwi_dn_ed.mif`;
+
+  $dwi = "dwi_dn_ed.mif";
+
+}else{
+  #---ugggh the mrconvert flipped it upside down... grrrr
+  print "fslswapdim noddi/brain_mask.nii  x -y z noddi/brain_mask-swap.nii\n";
+  `fslswapdim noddi/brain_mask.nii  x -y z noddi/brain_mask-swap.nii`;
+  `gunzip noddi/brain_mask-swap.nii.gz` unless -e "noddi/brain_mask-swap.nii";
+  print "fslswapdim noddi/dwi_dn.nii  x -y z noddi/dwi_dn-swap.nii\n";
+  `fslswapdim noddi/dwi_dn.nii  x -y z noddi/dwi_dn-swap.nii` unless -e "noddi/dwi_dn-swap.nii.gz";
+  `gunzip noddi/dwi_dn-swap.nii.gz` unless -e "noddi/dwi_dn-swap.nii";
+  
+  print "bvecs_bvals2camino.pl -vec ../$bvecs -val  ../$bvals -o NODDI.scheme\n";
+  `bvecs_bvals2camino.pl -vec ../$bvecs -val  ../$bvals -o NODDI.scheme`;
+
+  print "AMICO_process('./','','noddi/dwi_dn-swap.nii','noddi/brain_mask-swap.nii','NODDI.scheme')\n";
+  run_matlab("AMICO_process('./','','noddi/dwi_dn-swap.nii','noddi/brain_mask-swap.nii','NODDI.scheme')") unless -e "AMICO/NODDI/FIT_ICVF.nii";
+
+  ###### mrtrix processing
+  print "\n-----Fiber orientation/AFD processing (mrtrix)-------\n";
+  $dwi = "dwi_dn.mif";
+}
+
 
 #if this file exists don't run through everyting
-##$dwi = "dwi_dn_ed.mif";
-$dwi = "dwi_dn.mif";
 $done=0;
-if (-e "fixel_dir/afd.mif"){print "HARDI porcessing seems to be done...\n"; $done=1;}
+if (-e "fixel_dir/afd.mif"){print "HARDI processing seems to be done...\n"; $done=1;}
 if ($done==0){
 
 ### Fiber response estimation  
@@ -262,13 +291,13 @@ print "fslswapdim AMICO/NODDI/FIT_ICVF.nii -x y z AMICO/NODDI/FIT_ICVF-strides.n
 print "fslswapdim noddi/brain_mask-swap.nii  -x y z noddi/brain_mask-swap-strides.nii\n";
 `fslswapdim noddi/brain_mask-swap.nii -x y z  noddi/brain_mask-swap-strides.nii` unless -e "noddi/brain_mask-swap-strides.nii.gz";
 
-print "---------Check everything is lined up!-------\n";
-print "fsleyes ../ir-analysis/ir-diff.nii afd_voxel_strides.nii AMICO/NODDI/FIT_ICVF-strides.nii noddi/brain_mask-swap-strides.nii\n";
-`fsleyes ../ir-analysis/ir-diff.nii afd_voxel_strides.nii AMICO/NODDI/FIT_ICVF-strides.nii.gz noddi/brain_mask-swap-strides.nii.gz`;
+print "\n---------Check everything is lined up!-------\n";
+print "fsleyes ../ir-analysis/ir-diff-strides.nii* afd_voxel_strides.nii* AMICO/NODDI/FIT_ICVF-strides.nii* noddi/brain_mask-swap-strides.nii*\n";
+`fsleyes ../ir-analysis/ir-diff-strides.nii* afd_voxel_strides.nii* AMICO/NODDI/FIT_ICVF-strides.nii* noddi/brain_mask-swap-strides.nii*`;
 
 
 
-print "================Now draw the WM region you want to look at (call it roi.mif)=============\n";
+print "\n================Now draw the WM region you want to look at (call it roi.mif)=============\n";
 print "dwi2tensor -mask mask.mif $dwi dt.mif \n";
 `dwi2tensor -mask mask.mif $dwi dt.mif `;
 print "tensor2metric dt.mif -vector V1.mif -modulate FA\n";
@@ -285,9 +314,10 @@ $mask = "roi_strides.nii";
 
 $TR = `more ../info.txt | grep TR | grep -Eo '[0-9]+'`;chomp($TR); #in ms
 
-print "---------Please enter the afd threshold (default=0.1)   : ";
-$afd_thresh = <STDIN>;
-
+#print "---------Please enter the afd threshold (default=0.1)   : ";
+#$afd_thresh = <STDIN>;
+#chomp($afd_thresh);
+$afd_thresh=0.2;
 print "fibermyelin_pipeline.py -t1 T1.nii -Dpar Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -fixel fixel_dir-output\n";
 
 `fibermyelin_pipeline.py -t1 T1.nii -Dpar Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -fixel fixel_dir-output`;
