@@ -114,7 +114,7 @@ print "-------Now combine the 2 datasets-------\n";
 # we need to muck around or else it does not combine properly
 `gunzip ir-analysis/*.gz` unless -e "ir-analysis/unshuffle_fov1-remb0.nii";
 print "\ncomb_fov('ir-analysis/unshuffle_fov1-remb0.nii','ir-analysis/unshuffle_fov2-remb0.nii','TI.txt','ir-analysis/ir-diff.nii')\n";
-run_matlab("comb_fov('ir-analysis/unshuffle_fov1-remb0.nii','ir-analysis/unshuffle_fov2-remb0.nii','TI.txt','ir-analysis/ir-diff.nii')") unless -e "ir-analysis/ir-diff.nii";
+run_matlab("comb_fov('ir-analysis/unshuffle_fov1-remb0.nii','ir-analysis/unshuffle_fov2-remb0.nii','TI.txt','ir-analysis/ir-diff.nii')") unless -e "tmp-ir-diff.nii";
 
 print "---Make sure the spacing is correct---\n";
 print "mrconvert tmp-ir-diff.nii  -vox ,,2 ir-analysis/ir-diff.nii\n";
@@ -313,22 +313,24 @@ print "mrconvert -stride 1,2,3 roi.mif roi_strides.nii\n";
 $mask = "roi_strides.nii";
 
 $TR = `more ../info.txt | grep TR | grep -Eo '[0-9]+'`;chomp($TR); #in ms
+$TE = `more ../info.txt | grep TE | grep -Eo '[0-9]+'`;chomp($TE); #in ms
 
 #print "---------Please enter the afd threshold (default=0.1)   : ";
 #$afd_thresh = <STDIN>;
 #chomp($afd_thresh);
 $afd_thresh=0.2;
-print "fibermyelin_pipeline.py -t1 T1.nii -Dpar Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -fixel fixel_dir-output\n";
+`mkdir fixel_dir-output` unless -e "fixel_dir-output";
+print "fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR -TE $TE -fixel fixel_dir-output\n";
 
-`fibermyelin_pipeline.py -t1 T1.nii -Dpar Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -fixel fixel_dir-output`;
+`fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output`;
 
 # mrview V1.mif -fixel.load fixel_dir-output/t1_fixel.nii
 
 ## Now generate a file with the sorted T1 by direction
 # right now it's hard-coded in fibermyelin_pipeline.py but it could be an input
-print "fibermyelin_pipeline.py -t1 T1.nii -Dpar Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -fixel fixel_dir-output -sort > t1sort.txt\n";
+print "fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output -sort > t1sort.txt\n";
 
-`fibermyelin_pipeline.py -t1 T1.nii -Dpar Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -fixel fixel_dir-output -sort > t1sort.txt`;
+`fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output -sort > t1sort.txt`;
 
 
 sub run_matlab {
