@@ -84,6 +84,7 @@ end
 shift = header.MIEPIShiftPerInv; %shift factor
 numavg = header.Repetitions +1; %number of averages, have to add 1, total number of runs
 TR = header.TR; % repetition time
+TE = header.TE; %echo time
 spacing = header.MIEPISliceSpacing; % time between the acquisition of 2 slices
 minTI = header.TI; % 1st inversion time
 diffdirs = header.DiffusionDirections+1; % we have to add 1 here because there's a b=0;
@@ -158,6 +159,7 @@ fprintf(fileID,'%s %5d\n','shift factor = ',shift);
 fprintf(fileID,'%s %5d\n','SMS = ',mb);
 fprintf(fileID,'%s %5d\n','numavg = ',numavg);
 fprintf(fileID,'%s %5d\n','TR(ms) = ',TR/1000);
+fprintf(fileID,'%s %5d\n','TE(ms) = ',TE/1000);
 fprintf(fileID,'%s %5d\n','TI spacing(ms) = ',spacing/1000);
 fprintf(fileID,'%s %5d\n','Minimum TI(ms) = ',minTI/1000);
 fprintf(fileID,'%s %5d\n','Diffusion directions= ',diffdirs);
