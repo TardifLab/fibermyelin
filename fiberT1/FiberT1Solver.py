@@ -27,7 +27,7 @@ plot_fit=False
 global just_b0
 just_b0=False #have to set here and in calling script fibermyelin_pipeline.py
 global simulate #currently only for Dpar eq, not just b0,
-simulate=True
+simulate=False
 global sim_noise_level
 sim_noise_level=15 #S0 is hardcoded to 500 below, so 10 is 2%, 15 is 3%
 global sim_S0
