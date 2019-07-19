@@ -47,7 +47,7 @@ global bedpostx
 bedpostx=False
 
 global just_b0
-just_b0=False #have to set in FiberT1Solver.py too
+just_b0=True #have to set in FiberT1Solver.py too
 
 #for visualization W/L:
 #asparagus 500-800,1500

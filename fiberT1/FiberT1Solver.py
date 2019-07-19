@@ -27,7 +27,7 @@ global plot_fit
 plot_fit=False
 
 global just_b0
-just_b0=False #have to set here and in calling script fibermyelin_pipeline.py, a
+just_b0=True #have to set here and in calling script fibermyelin_pipeline.py, a
 
 global simulate #currently only for Dpar eq, not just b0,
 simulate=False
