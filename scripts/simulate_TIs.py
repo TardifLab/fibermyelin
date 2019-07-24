@@ -31,6 +31,9 @@ import argparse
 #fslmaths index_firstframe_strides.nii.gz  -thr 0.5 -uthr 1.5 -mas ../irdiff_4v8_20190319_121513/mb3/masks/mask2.nii.gz mask2_singles.nii
 #fslmaths mask3_singles.nii.gz -bin mask3_singles_bin.nii.gz
 
+global crossings_different_T1s
+crossings_different_T1s=True
+
 parser = argparse.ArgumentParser(description='')
 
 parser.add_argument('-o', dest='myresult_output_filename', help='output filename (.npy file). Optional', required=False, nargs=1)
@@ -54,11 +57,11 @@ else:
     num_TIs = num_SMS*num_shuffles
     num_slices = 72
 
-    gap_step=10
+    gap_step=300
 
     num_gaps = int((int(math.floor(max_TI / 12))-110)/gap_step) + 1
 
-    myresult=np.zeros([num_gaps, num_shuffles, 2, 2])
+    myresult=np.zeros([num_gaps, num_shuffles, 2, 4])
 
     for gap_index in range(num_gaps):
         gap = 110 + gap_index * gap_step
@@ -75,7 +78,7 @@ else:
 
             #run the sim:
 
-            subprocess.call(['/home/bic/jcampbel/source/fibermyelin_jc/fibermyelin/scripts/fibermyelin_pipeline.py',
+            subprocess.call(['/home/bic/jcampbel/source/fibermyelin_jc/fibermyelin/scripts/fibermyelin_pipeline3.py',
                                 '-t1', 't1_test',
                                 '-Dpar', 'Dpar_test.nii',
                                 '-mask', '/data/mril/mril4/jcampbel/IR-diff_test/irdiff_4v8_20190319_121513/mb3/masks/mask3.nii.gz',
@@ -94,69 +97,116 @@ else:
 
 
             #break into singles and crossings:
-            subprocess.call(['fslmaths', 't1_test.nii', '-mul', '/data/mril/mril4/jcampbel/IR-diff_test/TI_sim/mask3_singles_bin.nii.gz', 't1_test_singles.nii'])
-            subprocess.call(['fslmaths', 't1_test.nii','-mul', '/data/mril/mril4/jcampbel/IR-diff_test/TI_sim/mask3_crossings_bin.nii.gz', 't1_test_crossings.nii'])
+            subprocess.call(['mrcalc', 't1_test.nii', '/data/mril/mril4/jcampbel/IR-diff_test/TI_sim/mask3_singles_bin.nii.gz', '-mult', 't1_test_singles.nii', '-force'])
+            subprocess.call(['mrcalc', 't1_test.nii', '/data/mril/mril4/jcampbel/IR-diff_test/TI_sim/mask3_crossings_bin.nii.gz', '-mult', 't1_test_crossings.nii', '-force'])
+
+            #separate the first and second fiber:
+            subprocess.call(['fslroi', 't1_test_crossings.nii', 't1_test_crossings_firstfiber.nii','0', '1'])
+            subprocess.call(['fslroi', 't1_test_crossings.nii', 't1_test_crossings_secondfiber.nii','1', '1'])
+
+            #get mean and std from fslstats, for singles and crossings:
 
 
+            myresult[gap_index, shuffle, 0, 0] = subprocess.check_output(['fslstats', 't1_test_singles.nii', '-M'])
+            myresult[gap_index, shuffle, 0, 1] = subprocess.check_output(['fslstats', 't1_test_crossings.nii', '-M'])
+            myresult[gap_index, shuffle, 0, 2] = subprocess.check_output(['fslstats', 't1_test_crossings_firstfiber.nii', '-M'])
+            myresult[gap_index, shuffle, 0, 3] = subprocess.check_output(['fslstats', 't1_test_crossings_secondfiber.nii', '-M'])
+            myresult[gap_index, shuffle, 1, 0] = subprocess.check_output(['fslstats', 't1_test_singles.nii', '-S'])
+            myresult[gap_index, shuffle, 1, 1] = subprocess.check_output(['fslstats', 't1_test_crossings.nii', '-S'])
+            myresult[gap_index, shuffle, 1, 2] = subprocess.check_output(['fslstats', 't1_test_crossings_firstfiber.nii', '-S'])
+            myresult[gap_index, shuffle, 1, 3] = subprocess.check_output(['fslstats', 't1_test_crossings_secondfiber.nii', '-S'])
 
-            #get mean and std from fslstats,for singles and crossings:
 
-
-            myresult[gap_index, shuffle, 0, 0] = subprocess.check_output(['fslstats', 't1_test_singles.nii.gz', '-M'])
-            myresult[gap_index, shuffle, 0, 1] = subprocess.check_output(['fslstats', 't1_test_crossings.nii.gz', '-M'])
-            myresult[gap_index, shuffle, 1, 0] = subprocess.check_output(['fslstats', 't1_test_singles.nii.gz', '-S'])
-            myresult[gap_index, shuffle, 1, 1] = subprocess.check_output(['fslstats', 't1_test_crossings.nii.gz', '-S'])
-
-
-    np.save("myargs.myresult_output_filename", np.array(myresult))
+    np.save(myargs.myresult_output_filename[0], np.array(myresult))
 
 print myresult
 #plot:
 
 #bias in singles
 plt.figure(1, figsize=(9, 6))
-plt.subplot(221)
+plt.subplot(241)
 
-#DO: 110 * gap_step * range(num_gaps) fails, currently not in ms, just a gap index
+#DO: 110 + gap_step * range(num_gaps) fails, currently not in ms, just a gap index
 
 for shuffle in range (0, num_shuffles):
     plt.plot(range(num_gaps), myresult[:, shuffle, 0, 0]-750,label=['shuffle %d' % shuffle])
 plt.legend(loc='best')
-plt.title('Bias; single fibres', fontsize=18)
+plt.title('Bias; single fibers', fontsize=18)
 plt.xlabel('gap (ms)')
-plt.ylabel('bias (s)')
+plt.ylabel('bias (ms)')
 
-#bias in crossings
-plt.subplot(222)
-for shuffle in range (0, num_shuffles):
-    plt.plot(range(num_gaps), myresult[:, shuffle, 0, 1]-750,label=['shuffle %d' % shuffle])
-    #ax.plot([110 * np.ones(num_gaps) + range(num_gaps) * 25], myresult[:, shuffle, 0, 1]-750,label=['shuffle %d' % shuffle])
-plt.legend(loc='best')
-plt.title('Bias; crossing fibres', fontsize=18)
-plt.xlabel('gap (ms)')
-plt.ylabel('bias (s)')
+if not crossings_different_T1s:
+    #bias in crossings
+    plt.subplot(242)
+    for shuffle in range (0, num_shuffles):
+        plt.plot(range(num_gaps), myresult[:, shuffle, 0, 1]-750,label=['shuffle %d' % shuffle])
+
+    plt.legend(loc='best')
+    plt.title('Bias; crossing fiber', fontsize=18)
+    plt.xlabel('gap (ms)')
+    plt.ylabel('bias (ms)')
+
+else:
+    #bias in first fiber
+    plt.subplot(243)
+    for shuffle in range (0, num_shuffles):
+        plt.plot(range(num_gaps), myresult[:, shuffle, 0, 2]-700,label=['shuffle %d' % shuffle])
+
+    plt.legend(loc='best')
+    plt.title('Bias; first fiber', fontsize=18)
+    plt.xlabel('gap (ms)')
+    plt.ylabel('bias (ms)')
 
 
-#bias in singles
-plt.subplot(223)
+    #bias in second fiber
+    plt.subplot(244)
+    for shuffle in range (0, num_shuffles):
+        plt.plot(range(num_gaps), myresult[:, shuffle, 0, 3]-800,label=['shuffle %d' % shuffle])
+
+    plt.legend(loc='best')
+    plt.title('Bias; second fiber', fontsize=18)
+    plt.xlabel('gap (ms)')
+    plt.ylabel('bias (ms)')
+
+#std in singles
+plt.subplot(245)
 for shuffle in range (0, num_shuffles):
     print
     plt.plot(range(num_gaps),myresult[:, shuffle, 1, 0],label=['shuffle %d' % shuffle])
 plt.legend(loc='best')
-plt.title('Standard deviation; single fibres', fontsize=18)
+plt.title('Standard deviation; single fibers', fontsize=18)
 plt.xlabel('gap (ms)')
-plt.ylabel('standard deviation (s)')
+plt.ylabel('standard deviation (ms)')
 
-#bias in crossings
-plt.subplot(224)
-for shuffle in range (0, num_shuffles):
-    plt.plot(range(num_gaps),myresult[:, shuffle, 1, 1],label=['shuffle %d' % shuffle])
-plt.legend(loc='best')
-plt.title('Standard deviation; crossing fibres', fontsize=18)
-plt.xlabel('gap (ms)')
-plt.ylabel('standard deviation (s)')
+if not crossings_different_T1s:
+    #std in crossings
+    plt.subplot(246)
+    for shuffle in range (0, num_shuffles):
+        plt.plot(range(num_gaps),myresult[:, shuffle, 1, 1],label=['shuffle %d' % shuffle])
+    plt.legend(loc='best')
+    plt.title('Standard deviation; crossing fibers', fontsize=18)
+    plt.xlabel('gap (ms)')
+    plt.ylabel('standard deviation (ms)')
 
+else:
+    #std in first fiber
+    plt.subplot(247)
+    for shuffle in range (0, num_shuffles):
+        plt.plot(range(num_gaps),myresult[:, shuffle, 1, 2],label=['shuffle %d' % shuffle])
+    plt.legend(loc='best')
+    plt.title('Standard deviation; first fiber', fontsize=18)
+    plt.xlabel('gap (ms)')
+    plt.ylabel('standard deviation (ms)')
 
+    #std in second fiber
+    plt.subplot(248)
+    for shuffle in range (0, num_shuffles):
+        plt.plot(range(num_gaps),myresult[:, shuffle, 1, 3],label=['shuffle %d' % shuffle])
+    plt.legend(loc='best')
+    plt.title('Standard deviation; second fiber', fontsize=18)
+    plt.xlabel('gap (ms)')
+    plt.ylabel('standard deviation (ms)')
 
 plt.show()
 
+plt.savefig("sim_result_fig.png")

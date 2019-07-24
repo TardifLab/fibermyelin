@@ -22,10 +22,13 @@ import random
 #hardcoded T1 and D for CSF compartment are in IRDiffEqn
 
 #hardcoded global vars:
+
 global plot_fit
 plot_fit=False
+
 global just_b0
-just_b0=False #have to set here and in calling script fibermyelin_pipeline.py
+just_b0=True #have to set here and in calling script fibermyelin_pipeline.py, a
+
 global simulate #currently only for Dpar eq, not just b0,
 simulate=False
 global sim_noise_level
@@ -38,6 +41,7 @@ set_noIE=True
 
 #don't use this without editing the simulation code: it is hardcoded to T1=750 right now
 #this will make fibers have T1=700,800, ...
+
 global sim_different_T1s
 sim_different_T1s=False
 
@@ -64,11 +68,7 @@ fix_D_phantom3=False
 
 
 global set_Dpar_equal
-set_Dpar_equal=True#HERE this has to be true right now. have to set here and in calling script
-
-if (just_b0):
-    set_Dpar_equal=False #has to be for code structure and Dpar is irrelevant
-
+set_Dpar_equal=True #HERE this has to be true right now because the code hasn't been kept up to date for al cases. have to set here and in calling script
 
 
 
@@ -77,7 +77,8 @@ if (just_b0):
 from scipy.optimize import least_squares #least_squares
 
 
-
+if (just_b0):
+    set_Dpar_equal=False #for if strucuture to work; DO: clean this up
 
 class FiberT1Solver:
     """class to compute T1 for each fiber"""
@@ -146,29 +147,33 @@ class FiberT1Solver:
             self.init_params=np.zeros(3) #1 T1
             self.lowerbounds=np.zeros(3)
             self.upperbounds=np.zeros(3)
+
             self.number_of_fibers=1
             self.init_params[0]=750#T1 in ms
             self.lowerbounds[0]=200#0
             self.upperbounds[0]=4000#np.inf#
 
             #additional Johnson noise term neta:
-            self.init_params[self.number_of_fibers]=0.0
-            self.lowerbounds[self.number_of_fibers]=0
-            self.upperbounds[self.number_of_fibers]=np.inf
+            self.init_params[1]=0.0
+            self.lowerbounds[1]=0
+            self.upperbounds[1]=np.inf
 
             #unknown S0: this depends very much on the acquisition
             #use first signal point (first TI, b=0) and init T1, assume long TR DO change to steady state eq
-            self.init_params[self.number_of_fibers+1]=np.absolute(self.IR_DWIs[0]/(1-2*np.exp(-1.0*self.TIs[0]/750)))
+            self.init_params[2]=np.absolute(self.IR_DWIs[0]/(1-2*np.exp(-1.0*self.TIs[0]/750)))
+
+            if (simulate):
+               self.init_params[2]=sim_S0
 
             #S0:
-            self.lowerbounds[self.number_of_fibers+1]=0
-            self.upperbounds[self.number_of_fibers+1]=np.inf
+            self.lowerbounds[2]=0
+            self.upperbounds[2]=np.inf
 
             if (not set_noIE):
                 #Inversion Efficiency IE
-                self.init_params[self.number_of_fibers+2]=1.0
-                self.lowerbounds[self.number_of_fibers+2]=0.5 #assuming at least 90!
-                self.upperbounds[self.number_of_fibers+2]=1.0
+                self.init_params[3]=1.0
+                self.lowerbounds[3]=0.5 #assuming at least 90!
+                self.upperbounds[3]=1.0
 
         else:      #if Dpar for each fiber HERE this option is unfinished!!!; need to put fibers at the end so that other params keep their indices, for b0 option too
             self.init_params=np.zeros(2*self.number_of_fibers+2) #T1 and Dpar for each fiber
@@ -405,8 +410,10 @@ class FiberT1Solver:
             #NOTE this is just for Dpar eq case
             #default params, except potentially different T1s and no neta
             new_params=np.copy(self.init_params)
-            new_params[self.number_of_fibers+1]=0.0 #neta
-
+            if set_Dpar_equal:
+                new_params[self.number_of_fibers+1]=0.0 #neta
+            elif just_b0:
+                new_params[1]=0.0 #neta
 
 
             sim_data=SignedIRDiffEqn(new_params,newargs)
@@ -415,11 +422,12 @@ class FiberT1Solver:
             #sim_data=newargs[:,1]+IRDiffEqn(new_params,newargs) # this is the equation (sim) result
             random.seed()
             #real only: we don't want to do this
-            #newargs[:,1]=np.absolute(sim_data+[random.gauss(0,sim_noise_level) for i in range(len(sim_data))])
+            newargs[:,1]=np.absolute(sim_data+[random.gauss(0,sim_noise_level) for i in range(len(sim_data))])
 
             #add noise on two channels: we do want to do this
-            newargs[:,1]=np.sqrt(np.square(sim_data+[random.gauss(0,sim_noise_level) for i in range(len(sim_data))])+np.square([random.gauss(0,sim_noise_level) for i in range(len(sim_data))]))
 
+            #newargs[:,1]=np.sqrt(np.square(sim_data+[random.gauss(0,sim_noise_level) for i in range(len(sim_data))])+np.square([random.gauss(0,sim_noise_level) for i in range(len(sim_data))]))
+               
         #fit the equation: there are a lot of options here; user can modify this call
         #bounds could be implemented for 'lm'
 
@@ -752,8 +760,10 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
                 eq[h] = (1 - viso) * eq[h] + viso * (np.exp(-bvals[h] * CSF_D) * SteadyStateT1RecovnoIE(B1, TIs[h], TR, TE, CSF_T1))
 
         else: #just_b0
-
-            term2=SteadyStateT1Recov(params[numfibers+3], B1, TIs[h], TR, TE, params[0])
+            if (not set_noIE):
+                term2=SteadyStateT1Recov(params[3], B1, TIs[h], TR, TE, params[0])
+            else:
+                term2=SteadyStateT1RecovnoIE(B1, TIs[h], TR, TE, params[0])
 
             #GE ver
             #term2=1-2*np.exp(-1.0*TIs[h]/params[0])+np.exp(-1.0*TR/params[0])
@@ -771,7 +781,7 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
         if (set_Dpar_equal):
             sig[h]=sqrt((params[numfibers+2]*eq[h])**2+params[numfibers+1]**2)
         elif (just_b0):
-            sig[h]=sqrt((params[numfibers+1]*eq[h])**2+params[numfibers]**2)
+            sig[h]=sqrt((params[2]*eq[h])**2+params[1]**2)
         else:  #Dpar not equal, not implemented
             sig[h]=sqrt((params[2*numfibers+1]*eq[h])**2+params[2*numfibers]**2)
         out[h]=sig[h]-obs[h]
@@ -953,7 +963,7 @@ def SignedIRDiffEqn(params,*args): #equation for predicted signal; params is vec
 
         else: #just_b0
 
-            term2=SteadyStateT1Recov(params[numfibers+3], B1, TIs[h], TR, TE, params[0])
+            term2=SteadyStateT1Recov(params[3], B1, TIs[h], TR, TE, params[0])
 
             #GE ver
             #term2=1-2*np.exp(-1.0*TIs[h]/params[0])+np.exp(-1.0*TR/params[0])
@@ -971,7 +981,7 @@ def SignedIRDiffEqn(params,*args): #equation for predicted signal; params is vec
         if (set_Dpar_equal):
             sig[h]=params[numfibers+2]*eq[h]
         elif (just_b0):
-            sig[h]=params[numfibers+1]*eq[h]
+            sig[h]=params[2]*eq[h]
         #else:  #Dpar not equal, not implemented
 
         out[h]=sig[h]
