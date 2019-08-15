@@ -5,7 +5,7 @@ Created on Mon Oct 16 13:23:23 2017
 @author: jcampbel
 """
 
-# THIS IS A TEST OF THE BEST
+# WTF WTF WTFFFFF
 
 import vtk
 import numpy as np
