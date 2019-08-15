@@ -47,7 +47,7 @@ global bedpostx
 bedpostx=False
 
 global just_b0
-just_b0=False #have to set in other file too
+just_b0=False #have to set in FiberT1Solver.py too
 
 #for visualization W/L:
 #asparagus 500-800,1500
@@ -61,6 +61,10 @@ vis_range=vis_max-vis_min
 
 
 #end hardcoded stuff
+
+if (just_b0):
+    set_Dpar_equal=False
+
 
 
 
@@ -217,13 +221,6 @@ TR=float(myargs.TR[0])
 TE=float(myargs.TE[0])
 
 
-#HERE
-#for simulation check:
-#overwrite the second voxel with the weighted average of the first and third:
-#using 50/50 to start:
-#whole IRdiff series
-
-
 
 
 voxelcounter=0
@@ -332,7 +329,7 @@ if not (myargs.visualize or myargs.sortT1):
         
       
         
-        print('\n number_of_fibers %i:' % number_of_fibers)
+        print('\nnumber_of_fibers %i:' % number_of_fibers)
         print(fiber_dirs)
         print("AFDs:")
         print(AFD)
@@ -392,6 +389,9 @@ if not (myargs.visualize or myargs.sortT1):
                     Dparfit[i]=T1sandDparfit[number_of_fibers]
                     print('T1: %d' % T1s[i])
                     print('Dpar: %f' % Dparfit[i])
+                elif (just_b0):
+                    T1s[i]=T1sandDparfit[0]
+                    print('T1: %d' % T1s[0])
                 else:
                     T1s[i]=T1sandDparfit[2*i]
                     Dparfit[i]=T1sandDparfit[2*i+1]
