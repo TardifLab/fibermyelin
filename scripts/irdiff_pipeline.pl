@@ -41,6 +41,10 @@ $bvecs_ir="/data_/tardiflab/ilana/midiff_mgh/30bvecs-4avg-rmb0.txt";# 1 b=0, 30 
 $bvals_ir="/data_/tardiflab/ilana/midiff_mgh/30bvals-4avg-rmb0.txt";# 1 b=0, 30 directions, b=1000
 #$bvecs_ir="/data_/tardiflab/ilana/midiff_mgh/30bvecs-8avg-rmb0.txt";# 1 b=0, 30 directions, from Siemens built-in
 #$bvals_ir="/data_/tardiflab/ilana/midiff_mgh/30bvals-8avg-rmb0.txt";# 1 b=0, 30 directions, b=1000
+#$bvecs_ir="/data_/tardiflab/ilana/midiff_mgh/20bvecs-6avg-rmb0.txt";# 1 b=0, 20 directions, from Siemens built-in
+#$bvals_ir="/data_/tardiflab/ilana/midiff_mgh/20bvals-6avg-rmb0.txt";# 1 b=0, 20 directions, b=1000
+#$bvecs_ir="/data_/tardiflab/ilana/midiff_mgh/64bvecs-2avg-rmb0.txt";# 1 b=0, 20 directions, from Siemens built-in
+#$bvals_ir="/data_/tardiflab/ilana/midiff_mgh/64bvals-2avg-rmb0.txt";# 1 b=0, 20 directions, b=1000
 
 # TODO: right now assume the HARDI is always done the same way, the 108 direction protocol from UNF
 #$scheme="/data_/tardiflab/ilana/midiff_mgh/NODDI.scheme";
@@ -117,8 +121,11 @@ print "\ncomb_fov('ir-analysis/unshuffle_fov1-remb0.nii','ir-analysis/unshuffle_
 run_matlab("comb_fov('ir-analysis/unshuffle_fov1-remb0.nii','ir-analysis/unshuffle_fov2-remb0.nii','TI.txt','ir-analysis/ir-diff.nii')") unless -e "tmp-ir-diff.nii";
 
 print "---Make sure the spacing is correct---\n";
-print "mrconvert tmp-ir-diff.nii  -vox ,,2 ir-analysis/ir-diff.nii\n";
-`mrconvert tmp-ir-diff.nii  -vox ,,2 ir-analysis/ir-diff.nii` unless -e "ir-analysis/ir-diff.nii";
+#print "mrconvert tmp-ir-diff.nii  -vox ,,2 ir-analysis/ir-diff.nii\n";
+#`mrconvert tmp-ir-diff.nii  -vox ,,2 ir-analysis/ir-diff.nii` unless -e "ir-analysis/ir-diff.nii";
+print "mrconvert tmp-ir-diff.nii  -vox ,,2.6 ir-analysis/ir-diff.nii\n";
+`mrconvert tmp-ir-diff.nii  -vox ,,2.6 ir-analysis/ir-diff.nii` unless -e "ir-analysis/ir-diff.nii";
+
 #--> fit b=0
 #fslroi ir-diff-reformat.nii b0-ir-diff.nii 0 8
 
