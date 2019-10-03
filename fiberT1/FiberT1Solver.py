@@ -458,7 +458,14 @@ class FiberT1Solver:
                 
                 
                 plotdata=np.zeros([self.number_of_TIs,4])
-                thisDWI=[0, 21, 5, 30]
+
+
+                if (self.number_of_diff_encodes==31):
+                    thisDWI=[0, 21, 5, 30] #these are the index for b=0, and closest to be along z,y,z
+                if (self.number_of_diff_encodes == 21):
+                    thisDWI = [0, 18, 2, 1]
+                if (self.number_of_diff_encodes == 65):
+                    thisDWI = [0, 59, 2, 1]
                 for i in range(self.number_of_TIs):
                     for j in range(4):
                         plotdata[i,j]=newargs[i*self.number_of_diff_encodes+thisDWI[j],1]
@@ -466,11 +473,17 @@ class FiberT1Solver:
                 ax.plot(self.TIs,plotdata[:,1], 'b--')
                 ax.plot(self.TIs,plotdata[:,2], 'g--')
                 ax.plot(self.TIs,plotdata[:,3], 'r--')
-                
-                ax.set_title('All TIs, b=0 (black), ~z (blue), ~y (green), ~x (red) gradient orientations', fontsize=18)
-                
+
+                #ymax = newargs[:, 1].max()
+                ymax=250
+                plt.ylim(0, ymax*1.1)
+                #ax.set_title('All TIs, b=0 (black), ~z (blue), ~y (green), ~x (red) gradient orientations', fontsize=18)
+                ax.set_title('Raw (--) and Fitted (-) Data',
+                             fontsize=18)
+                plt.xlabel('Inversion Times (ms)',fontsize=14)
+                plt.ylabel('Signal Intensity',fontsize=14)
+
                 #now set to predicted signal:
-                
                 pred_sig_res=IRDiffEqn(res_lsq.x,newargs)
                 
                 
@@ -478,17 +491,26 @@ class FiberT1Solver:
                 for i in range(self.number_of_TIs):                   
                     for j in range(4):
                         plotdata[i,j]=newargs[i*self.number_of_diff_encodes+thisDWI[j],1]+pred_sig_res[i*self.number_of_diff_encodes+thisDWI[j]]
-                ax.plot(self.TIs,plotdata[:,0], 'k-')
-                ax.plot(self.TIs,plotdata[:,1], 'b-')
-                ax.plot(self.TIs,plotdata[:,2], 'g-')
-                ax.plot(self.TIs,plotdata[:,3], 'r-')
-                
+                ax.plot(self.TIs,plotdata[:, 0], 'k-', linewidth=2, label='b=0')
+                ax.plot(self.TIs,plotdata[:,1], 'b-',linewidth=2, label='z-oriented')
+                ax.plot(self.TIs,plotdata[:,2], 'g-',linewidth=2, label='y-oriented')
+                ax.plot(self.TIs,plotdata[:,3], 'r-',linewidth=2, label='x-oriented')
+                ax.legend()
+
                 #these vary a bit with acquisition
                 #textstr='dashed: data\nsolid: fit\n\nactual directions:\n~x=[-0.97958797216415, 0.17135678231716, 0.10509198158979]\n~y=[0.20307792723178, 0.94054549932479, -0.27227476239204]\n~z=[-0.20379328727722, 0.17156073451042, 0.96386468410492]'
                 #ax.text(0.9,250,textstr)
                 
                 #DO: predicted for a more reasonable Dpar: run all (fit) a second time
-
+                # write fitted T1 to plot
+                textstr =''
+                for t in range(self.number_of_fibers):
+                    textstr = textstr+(r'$T1_%d=%.2f ms (f_%d=%.1f)$' % (t+1,res_lsq.x[t],t+1,self.AFDs[t]))
+                    if (t!=self.number_of_fibers-1):
+                        textstr =textstr + ('\n')
+                props = dict(boxstyle='round', facecolor='grey', alpha=0.5)
+                ax.text(0.3, 0.8, textstr, transform=ax.transAxes, fontsize=18,
+                        verticalalignment='top', bbox=props)
 
             #phantom2
             #1 is +x-z, 2 is -x-z, 3 is +y-z
@@ -499,12 +521,12 @@ class FiberT1Solver:
                 for i in range(self.number_of_TIs):
                     for j in range(4):
                         plotdata[i,j]=args[i*self.number_of_diff_encodes+thisDWI[j],1]
-                ax.plot(range(self.number_of_TIs),plotdata[:,0], 'k--')
-                ax.plot(range(self.number_of_TIs),plotdata[:,1], 'b--')
-                ax.plot(range(self.number_of_TIs),plotdata[:,2], 'g--')
-                ax.plot(range(self.number_of_TIs),plotdata[:,3], 'r--') 
+                ax.plot(range(self.number_of_TIs),plotdata[:,0], 'k--',linewidth=2)
+                ax.plot(range(self.number_of_TIs),plotdata[:,1], 'b--',linewidth=2)
+                ax.plot(range(self.number_of_TIs),plotdata[:,2], 'g--',linewidth=2)
+                ax.plot(range(self.number_of_TIs),plotdata[:,3], 'r--',linewidth=2)
                 ax.set_title('All TIs, b=0 (black), +x-z (blue), -x-z (green), +y-z (red) gradient orientations', fontsize=18)
-            
+
             
             #plt.xlabel('TI')
             #plt.ylabel('signal')
