@@ -9,6 +9,8 @@ Created on Wed Oct  4 13:43:18 2017
 
 '''This is a pipeline to process IR-diffusion data'''
 
+# Adapted for no IE and just-b0 functionality
+
 
 #from pyminc.volumes.factory import *
 from fiberT1.FiberT1Solver import FiberT1Solver
