@@ -98,7 +98,7 @@ parser.add_argument('-afdthresh', dest='AFD_thresh', help='input AFD threshold, 
 parser.add_argument('-dirs', dest='dirs_image_filename', help='input directions filename, currently required even for -vis', required=True, nargs=1)
 #parser.add_argument('-IRdiff', dest='IR_diff_image_filename', help='input IR diffusion weighted image series; required for full computation',  required=False, nargs=1)                     
 parser.add_argument('-MTdiff', dest='MT_diff_image_filename', help='input MT diffusion weighted image series; required for full computation',  required=False, nargs=1)                     
-#parser.add_argument('-TIs', dest='TIs_filename', help='input text file of TIs for each slice; required for full computation',  required=False, nargs=1)                   
+parser.add_argument('-mtw', dest='MTs_filename', help='input text file of MT weighting for each volume',  required=False, nargs=1)                   
 parser.add_argument('-bvals', dest='bvals_filename', help='input text file of bvals; required for full computation',  required=False, nargs=1)                     
 parser.add_argument('-bvecs', dest='bvecs_filename', help='input text file of bvecs; required for full computation',  required=False, nargs=1)                     
 #parser.add_argument('-TR', dest='TR', help='input nominal TR for short-TR steady state equation (ms)',required=True,nargs=1)
@@ -261,25 +261,24 @@ if (bedpostx):
         number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]=max_fibers
         
 if not (myargs.visualize or myargs.sortMT):    
-    
+    #number of DWIs (assume one b=0, at beginning). assume x,y,z,diff
+    number_of_DWIs=MT_diff_img.get_data().shape[3]
   
     number_of_slices=0
-    # with open(myargs.TIs_filename[0],'r') as f:
+    #with open(myargs.MTs_filename[0],'r') as f:
     #     for line in f:
     #         number_of_TIs = len(line.split())
     #         number_of_slices+=1
     #
-    # TIs_allslices=np.zeros([number_of_slices,number_of_TIs])
+    MTws=np.zeros(number_of_DWIs) #MT weighting for each volume
     # #TRs_allslices=np.zeros([number_of_slices,number_of_TIs])
     #
     #
-    # i=0
-    # with open(myargs.TIs_filename[0],'r') as f:
-    #     for line in f:
-    #         TIs_allslices[i]=np.array(line.split()).astype(np.float)
-    #         i+=1
-
-
+    i=0
+    with open(myargs.MTs_filename[0],'r') as f:
+        for line in f:
+            MTws[i]=np.array(line.split()).astype(np.float)
+            i+=1
     
 
     #get the bvals and bvecs for this acquisition (currently assuming same for each TI!)
@@ -294,14 +293,7 @@ if not (myargs.visualize or myargs.sortMT):
     else: #axial (even if prone)
         grad_table.bvecs[:,0]=-1.0*grad_table.bvecs[:,0]
     #print grad_table.bvecs[:,0]
-    
-
-    
-    #number of DWIs (assume one b=0, at beginning). assume x,y,z,diff
-    
-    number_of_DWIs=MT_diff_img.get_data().shape[3]
-    
-            
+       
     
     MT_array = np.zeros(AFD_img.header.get_data_shape())
     Dparfit_array = np.zeros(AFD_img.header.get_data_shape())
@@ -379,7 +371,7 @@ if not (myargs.visualize or myargs.sortMT):
             
             #to test fixing D, we have to giev it the voxel coord
             
-            mtsolver.SetInputData(fiber_dirs,AFD,MT_DWIs,grad_table,vic,voxels[0][j],voxels[1][j],voxels[2][j],sagittal,set_Dpar_equal,viso,B1)
+            mtsolver.SetInputData(fiber_dirs,AFD,MT_DWIs,MTws,grad_table,vic,voxels[0][j],voxels[1][j],voxels[2][j],sagittal,set_Dpar_equal,viso,B1)
             MTs = np.zeros(number_of_fibers)
             Dparfit=np.zeros(number_of_fibers)
             #MTsandDparfit=np.zeros([number_of_fibers,2])
