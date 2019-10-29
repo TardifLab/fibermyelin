@@ -37,7 +37,7 @@ global sim_S0
 sim_S0=500
 
 global set_noIE
-set_noIE=True
+set_noIE=False
 
 #don't use this without editing the simulation code: it is hardcoded to T1=750 right now
 #this will make fibers have T1=700,800, ...
@@ -144,9 +144,14 @@ class FiberT1Solver:
                 self.upperbounds[self.number_of_fibers+3]=1.0
 
         elif (just_b0):
-            self.init_params=np.zeros(3) #1 T1
-            self.lowerbounds=np.zeros(3)
-            self.upperbounds=np.zeros(3)
+            if (not set_noIE):
+                self.init_params=np.zeros(4) #T1 for each fiber
+                self.lowerbounds=np.zeros(4)
+                self.upperbounds=np.zeros(4)
+            else:
+                self.init_params=np.zeros(3) #1 T1
+                self.lowerbounds=np.zeros(3)
+                self.upperbounds=np.zeros(3)
 
             self.number_of_fibers=1
             self.init_params[0]=750#T1 in ms
@@ -265,9 +270,9 @@ class FiberT1Solver:
         counter=0
         for i in range(0,self.number_of_diff_encodes):
             for j in range(0,self.number_of_TIs):
-                if (self.IR_DWIs[i]<9E-9):
-                    print "IR DWI image value 0"
-                    return None
+                #if (self.IR_DWIs[i]<9E-9):
+                    #print "IR DWI image value 0"
+                    #return None
                 if (just_b0): #we will repeat (not necessary but allows the rest of this code to be used):
                     args[j*self.number_of_diff_encodes+i,1]=self.IR_DWIs[j]
 
