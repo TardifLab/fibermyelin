@@ -23,7 +23,7 @@ import random
 
 #hardcoded global vars:
 global plot_fit
-plot_fit=False
+plot_fit=True
 global just_b0
 just_b0=False #have to set here and in calling script fibermyelin_pipeline.py
 global simulate #currently only for Dpar eq, not just b0,
@@ -32,6 +32,8 @@ global sim_noise_level
 sim_noise_level=15 #S0 is hardcoded to 500 below, so 10 is 2%, 15 is 3%
 global sim_S0
 sim_S0=500
+global plot_res #this plots the residuals by iterating over solutions, only use this with 1 voxel!
+plot_res=True #plot_fit needs to be True as well
 
 #don't use this without editing the simulation code: it is hardcoded to T1=750 right now
 #this will make fibers have T1=700,800, ...
@@ -532,6 +534,36 @@ class FiberT1Solver:
             #plt.ylabel('signal')
             
             plt.show()
+
+            #plot solution space (this now only works for 2 fibers)
+            if(plot_res):
+                # Create a figure instance
+                fig = plt.figure(2, figsize=(9, 6))
+                # Create an axes instance
+                ax = fig.add_subplot(111)
+
+                t1_1=np.arange(650, 900, 10).tolist()
+                t1_2=np.arange(650, 900, 10).tolist()
+                MSE = np.zeros([len(t1_1), len(t1_2)])
+                for g in range(len(t1_1)):
+                    for h in range(len(t1_2)):
+                        res_lsq.x[0]=t1_1[g]
+                        res_lsq.x[1]=t1_2[h]
+                        pred_sig_res=IRDiffEqn(res_lsq.x,newargs)
+                        summation=0
+                        for p in range (len(pred_sig_res)):
+                            squared_difference = pred_sig_res[p]**2
+                            summation = summation + squared_difference
+                        MSE[g,h] = summation/len(pred_sig_res)
+                plt.imshow(MSE, interpolation='none')
+                ax.set_title('Mean-Squared Error',fontsize=18)
+                plt.xlabel('T1_2(ms)', fontsize=14)
+                plt.ylabel('T1_1(ms)', fontsize=14)
+                plt.xticks(range(len(t1_2)), t1_2,rotation=45)
+                plt.yticks(range(len(t1_1)), t1_1)
+                plt.clim(145, 3*np.min(MSE))
+                plt.colorbar(orientation='vertical')
+                plt.show
         
 #==============================================================================
 #         for i in range(0,self.number_of_fibers):
