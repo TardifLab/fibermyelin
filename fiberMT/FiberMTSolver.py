@@ -31,7 +31,10 @@ sim_noise_level=15 #S0 is hardcoded to 500 below, so 10 is 2%, 15 is 3%
 global sim_S0
 sim_S0=500
 global plot_res #this plots the residuals by iterating over solutions, only use this with 1 voxel!
-plot_res=True #plot_fit needs to be True as well
+plot_res=False #plot_fit needs to be True as well
+global dr_afd #this plots the residuals by iterating over different 'doctored' afds, only use this with 1 voxel!
+dr_afd=False #plot_fit needs to be True as well
+
 
 #don't use this without editing the simulation code: it is hardcoded to T1=750 right now
 #this will make fibers have T1=700,800, ...
@@ -361,15 +364,17 @@ class FiberMTSolver:
         
         #to weight b=0 more (instead of actually acquiring more), repeat N more times:        
 
-        N = np.int(0.1*(self.number_of_diff_encodes-1))-1
-        newargs = np.zeros((self.number_of_contrasts*self.number_of_diff_encodes+self.number_of_contrasts*N,10+6*self.number_of_fibers))
-        for i in range(self.number_of_contrasts*self.number_of_diff_encodes):
-            newargs[i,:]=args[i,:]
-        for j in range(self.number_of_contrasts):
-            for i in range(N):
+        #N = np.int(0.1*(self.number_of_diff_encodes-1))-1
+        #newargs = np.zeros((self.number_of_contrasts*self.number_of_diff_encodes+self.number_of_contrasts*N,10+6*self.number_of_fibers))
+        #for i in range(self.number_of_contrasts*self.number_of_diff_encodes):
+        #    newargs[i,:]=args[i,:]
+        #don't add b=0s, there are already some in the acquisition
+        #for j in range(self.number_of_contrasts):
+        #    for i in range(N):
 
-                newargs[self.number_of_contrasts*self.number_of_diff_encodes+j*N+i,:]=args[j*self.number_of_contrasts,:]      #the b=0 for that TI
+        #       newargs[self.number_of_contrasts*self.number_of_diff_encodes+j*N+i,:]=args[j*self.number_of_contrasts,:]      #the b=0 for that TI
 
+        newargs = args
               
                 
         if (simulate):#simulate data for these input fibers and AFDs:
@@ -517,19 +522,21 @@ class FiberMTSolver:
             #plot solution space (this now only works for 2 fibers)
             if(plot_res):
                 # Create a figure instance
-                fig = plt.figure(1, figsize=(9, 6))
+                fig2 = plt.figure(2, figsize=(9, 6))
                 # Create an axes instance
-                ax = fig.add_subplot(111)
+                ax = fig2.add_subplot(111)
 
                 mt1=np.arange(0, 1, 0.05).tolist()
                 mt2=np.arange(0, 1, 0.05).tolist()
                 MSE = np.zeros([len(mt1), len(mt2)])
+                params=res_lsq.x
                 for g in range(len(mt1)):
                     for h in range(len(mt2)):
-                        res_lsq.x[0]=mt1[g]
-                        res_lsq.x[1]=mt2[h]
-                        pred_sig_res=MTDiffEqn(res_lsq.x,newargs)
+                        params[0]=mt1[g]
+                        params[1]=mt2[h]
+                        pred_sig_res=MTDiffEqn(params,newargs)
                         summation=0
+                        #compute the mean-squared-error
                         for p in range (len(pred_sig_res)):
                             squared_difference = pred_sig_res[p]**2
                             summation = summation + squared_difference
@@ -537,11 +544,78 @@ class FiberMTSolver:
                 plt.imshow(MSE, interpolation='none')
                 plt.xlabel('MT2', fontsize=14)
                 plt.ylabel('MT1', fontsize=14)
+                ax.set_title('MSE')
                 plt.xticks(range(len(mt2)), mt2)
                 plt.yticks(range(len(mt1)), mt1)
-                plt.clim(0, 3*np.min(MSE))
+                plt.clim(100, 130)
                 plt.colorbar(orientation='vertical')
-                plt.show
+
+
+
+            if(dr_afd): # what if we use ariticial AFDs, are the fits better? (only 2 fibers for now)
+                # Create a figure instance
+                fig2 = plt.figure(2, figsize=(9, 6))
+                # Create an axes instance
+                ax2 = fig2.add_subplot(111)
+
+                afd1=np.arange(0.1, 1, 0.1).tolist()
+                afd2=np.arange(0.1, 1, 0.1).tolist()
+                MSE = np.zeros([len(afd1), len(afd2)])
+                MT1 = np.zeros([len(afd1), len(afd2)]) #computed MT values
+                MT2 = np.zeros([len(afd1), len(afd2)]) #computed MT values
+                tempargs=newargs
+
+                for g in range(len(afd1)):
+                    for h in range(len(afd2)):
+                        #args[:,7,13,7+6*i,...]=AFD(fiber i - 0 offset)   
+                        tempargs[:,7]=afd1[g]
+                        tempargs[:,13]=afd2[h]
+                        #redo the fit
+                        res_lsq_tmp = least_squares(MTDiffEqn, self.init_params, method='trf', bounds=tuple([self.lowerbounds,self.upperbounds]),args=tempargs, jac='3-point')
+                        pred_sig_res=MTDiffEqn(res_lsq_tmp.x,tempargs)
+                        summation=0
+                        #compute the mean-squared-error
+                        for p in range (len(pred_sig_res)):
+                            squared_difference = pred_sig_res[p]**2
+                            summation = summation + squared_difference
+                        MSE[g,h] = summation/len(pred_sig_res)
+                        MT1[g,h] = res_lsq_tmp.x[0]
+                        MT2[g,h] = res_lsq_tmp.x[1]
+                plt.imshow(MSE, interpolation='none')
+                plt.xlabel('AFD2', fontsize=14)
+                plt.ylabel('AFD1', fontsize=14)
+                ax2.set_title('MSE')
+                plt.xticks(range(len(afd2)), afd2)
+                plt.yticks(range(len(afd1)), afd1)
+                plt.clim(100, 150)
+                plt.colorbar(orientation='vertical')
+
+                ## now plot the MT values
+                # Create a figure instance
+                fig3 = plt.figure(3, figsize=(9, 6))
+                # Create an axes instance
+                ax3 = fig3.add_subplot(111)
+                plt.imshow(MT1, interpolation='none')
+                plt.xlabel('AFD2', fontsize=14)
+                plt.ylabel('AFD1', fontsize=14)
+                ax3.set_title('MT1')
+                plt.xticks(range(len(afd2)), afd2)
+                plt.yticks(range(len(afd1)), afd1)
+                plt.colorbar(orientation='vertical')
+                plt.clim(0, 0.5)
+
+                # Create a figure instance
+                fig4 = plt.figure(4, figsize=(9, 6))
+                # Create an axes instance
+                ax4 = fig4.add_subplot(111)
+                plt.imshow(MT2, interpolation='none')
+                plt.xlabel('AFD2', fontsize=14)
+                plt.ylabel('AFD1', fontsize=14)
+                ax4.set_title('MT2')
+                plt.xticks(range(len(afd2)), afd2)
+                plt.yticks(range(len(afd1)), afd1)
+                plt.colorbar(orientation='vertical')
+                plt.clim(0, 0.5)
         
 #==============================================================================
 #         for i in range(0,self.number_of_fibers):
@@ -551,7 +625,15 @@ class FiberMTSolver:
 #             else:
 #                 self.T1s[i]=res_lsq.x[0]
 #==============================================================================
-        
+        # compute the MSE
+        pred_sig_res=MTDiffEqn(res_lsq.x,newargs) #predicted signal residual
+        summation = 0
+        for p in range(len(pred_sig_res)):
+            squared_difference = pred_sig_res[p] ** 2
+            summation = summation + squared_difference
+        MSE = summation / len(pred_sig_res)
+        print("MSE %f" % MSE)
+       
         #return the entire fit:
         return res_lsq.x
         
@@ -677,8 +759,8 @@ def MTDiffEqn(params,*args): #equation for residuals; params is vector of the un
     for h in range(0,number_of_obs):  
         if (not just_b0):
             for i in range(0,numfibers):             
-                #term1=norm_AFD[i]
-                term1=AFD[i]
+                term1=norm_AFD[i]
+                #term1=AFD[i]
                 
                 if (set_Dpar_equal):
 
@@ -722,7 +804,7 @@ def MTDiffEqn(params,*args): #equation for residuals; params is vector of the un
 
                     #this is the low-density mean-field tortuosity approximation, and is probably incorrect for realistically tight axonal packing
                     #hardcoded for b=1000; HERE change if b is not 1000!
-                    Dperp=-np.log((1-vic)*np.exp(-(1-vic)*Dpar*1000)+vic)/1000
+                    Dperp=-np.log((1-vic)*np.exp(-(1-vic)*Dpar*1500)+vic)/1500
                         
                     
                       
