@@ -192,10 +192,10 @@ if (bedpostx):
     max_fibers=2
     AFD_img_fsl=[]
     fiber_dirs_img_fsl=[]
-    AFD_img_fsl.append(nib.load("bedpost_outputs_strides/mean_f1samples_strides.nii"))
-    AFD_img_fsl.append(nib.load("bedpost_outputs_strides/mean_f2samples_strides.nii"))
-    fiber_dirs_img_fsl.append(nib.load("bedpost_outputs_strides/dyads1_strides.nii"))
-    fiber_dirs_img_fsl.append(nib.load("bedpost_outputs_strides/dyads2_strides.nii"))
+    AFD_img_fsl.append(nib.Nifti2Image.from_image(nib.load("bedpost_outputs_strides/mean_f1samples_strides.nii")))
+    AFD_img_fsl.append(nib.Nifti2Image.from_image(nib.load("bedpost_outputs_strides/mean_f2samples_strides.nii")))
+    fiber_dirs_img_fsl.append(nib.Nifti2Image.from_image(nib.load("bedpost_outputs_strides/dyads1_strides.nii")))
+    fiber_dirs_img_fsl.append(nib.Nifti2Image.from_image(nib.load("bedpost_outputs_strides/dyads2_strides.nii")))
     
 #mask_img=nib.load(myargs.mask_image_filename[0])    
 mask_img=nib.Nifti2Image.from_image(nib.load(myargs.mask_image_filename[0]))    
@@ -227,39 +227,46 @@ AFD_thresh=float(myargs.AFD_thresh[0])
 #using 50/50 to start:
 #whole IRdiff series
 
-
-
-
 voxelcounter=0
-    
-for j in range(len(voxels[0])):
-       
-    #get number of super-threshold AFDs=number_of_fibers            
-    number_of_fibers=0        
-    for l in range(max_fibers): 
-        #ASSUMING ORDERED and stopping at 3:
-        if (l<3):                 
-            if AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]>AFD_thresh:            
-                AFD_array[voxels[0][j],voxels[1][j],voxels[2][j],number_of_fibers]=AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]            
-                fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*number_of_fibers]=fiber_dirs_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],3*l]
-                fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*number_of_fibers+1]=fiber_dirs_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],3*l+1]
-                fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*number_of_fibers+2]=fiber_dirs_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],3*l+2]
-                number_of_fibers+=1
-            
-           
-    number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]=number_of_fibers        
-
 #FSL BEDPOSTX version:
-#note that fiber dirs in this case are in "strided" voxel space 
+#note that fiber dirs in this case are in "strided" voxel space
 if (bedpostx):
     for j in range(len(voxels[0])):
+        #get number of super-threshold AFDs=number_of_fibers
+        number_of_fibers=0
         for l in range(max_fibers):
-            AFD_array[voxels[0][j],voxels[1][j],voxels[2][j],l]=AFD_img_fsl[l].get_data()[voxels[0][j],voxels[1][j],voxels[2][j]]
-            fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*l]=-1.0*fiber_dirs_img_fsl[l].get_data()[voxels[0][j],voxels[1][j],voxels[2][j],0]
-            fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*l+1]=fiber_dirs_img_fsl[l].get_data()[voxels[0][j],voxels[1][j],voxels[2][j],1]
-            fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*l+2]=fiber_dirs_img_fsl[l].get_data()[voxels[0][j],voxels[1][j],voxels[2][j],2]
-        number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]=max_fibers
-        
+            #ASSUMING ORDERED and stopping at 3:
+            if (l<3):
+                if AFD_img_fsl[l].get_data()[voxels[0][j],voxels[1][j],voxels[2][j]]>AFD_thresh:
+                    AFD_array[voxels[0][j],voxels[1][j],voxels[2][j],l]=AFD_img_fsl[l].get_data()[voxels[0][j],voxels[1][j],voxels[2][j]]
+                    fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*l]=-1.0*fiber_dirs_img_fsl[l].get_data()[voxels[0][j],voxels[1][j],voxels[2][j],0]
+                    fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*l+1]=fiber_dirs_img_fsl[l].get_data()[voxels[0][j],voxels[1][j],voxels[2][j],1]
+                    fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*l+2]=fiber_dirs_img_fsl[l].get_data()[voxels[0][j],voxels[1][j],voxels[2][j],2]
+                    number_of_fibers+=1
+        number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]=number_of_fibers
+else:
+
+    for j in range(len(voxels[0])):
+
+        #get number of super-threshold AFDs=number_of_fibers
+        number_of_fibers=0
+        AFD_f1 = AFD_img.get_data()[voxels[0][j], voxels[1][j], voxels[2][j], 0]  # largest fiber population
+        for l in range(max_fibers):
+            #ASSUMING ORDERED and stopping at 3:
+            if (l<3):
+                # only keep those that are above the threshold ratio
+                if AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]>AFD_thresh:
+                #if AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]>=AFD_f1*AFD_thresh:
+                    AFD_array[voxels[0][j],voxels[1][j],voxels[2][j],number_of_fibers]=AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]
+                    fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*number_of_fibers]=fiber_dirs_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],3*l]
+                    fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*number_of_fibers+1]=fiber_dirs_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],3*l+1]
+                    fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*number_of_fibers+2]=fiber_dirs_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],3*l+2]
+                    number_of_fibers+=1
+
+
+        number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]=number_of_fibers
+
+
 if not (myargs.visualize or myargs.sortMT):    
     #number of DWIs (assume one b=0, at beginning). assume x,y,z,diff
     number_of_DWIs=MT_diff_img.get_data().shape[3]
@@ -418,11 +425,13 @@ if not (myargs.visualize or myargs.sortMT):
                     
     MT_array_zeroed=np.zeros(AFD_img.header.get_data_shape()) 
     
-    for j in range(len(voxels[0])):  
+    for j in range(len(voxels[0])):
+        AFD_f1 = AFD_img.get_data()[voxels[0][j], voxels[1][j], voxels[2][j], 0]  # largest fiber population
         counter=0
         for l in range(max_fibers): 
                              
-            if AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]>AFD_thresh:            
+            if AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]*AFD_thresh:            
+            #if AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]>=AFD_f1*AFD_thresh:            
                 MT_array_zeroed[voxels[0][j],voxels[1][j],voxels[2][j],l]=MT_array[voxels[0][j],voxels[1][j],voxels[2][j],counter]
                 counter+=1
             else:
@@ -441,65 +450,95 @@ if not (myargs.visualize or myargs.sortMT):
     #output the directions, t1, and index files in sparse format. 
     #I'm doing this for the thresholded data
     #index is the size of AFD, first frame
-        
-         
-    new_size=[AFD_img.header.get_data_shape()[0],AFD_img.header.get_data_shape()[1], AFD_img.header.get_data_shape()[2],2]
-    
-    index_array=np.zeros(new_size)
-    
-    #temporarily make these as enormous as possible:
-    
-    
-    thresh_dirs_array=np.zeros([AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2],3,1])
-    
-    mt_fixel_array=np.zeros([AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2],1,1])
-    
-    counter=0
-    #for i in range(AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2])
-    for i in range(len(voxels[0])):#for just the mask
-        fibercounter=0
-        for l in range(max_fibers):   
-            #ASSUMING ORDERED and stopping at 3:
-            if (l<3):
-                if AFD_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],l]>AFD_thresh: 
-                    if (index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]==0):#set on first fiber
-                        
-                        index_array[voxels[0][i],voxels[1][i],voxels[2][i],1]=counter
-                    thresh_dirs_array[counter,0,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l]
-                    thresh_dirs_array[counter,1,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+1]
-                    thresh_dirs_array[counter,2,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+2]
+    if (bedpostx):
+        new_size=[AFD_img_fsl[0].header.get_data_shape()[0],AFD_img_fsl[0].header.get_data_shape()[1], AFD_img_fsl[0].header.get_data_shape()[2],2]
+        index_array=np.zeros(new_size)
 
-		    if (just_b0):
-		        mt_fixel_array[counter,0,0]=MT_array_zeroed[voxels[0][i],voxels[1][i],voxels[2][i],0]
-			#print("%d\n" % t1_fixel_array[counter,0,0])
-		    else:	
-                        mt_fixel_array[counter,0,0]=MT_array_zeroed[voxels[0][i],voxels[1][i],voxels[2][i],l]
-                    
-                    counter+=1
-                    fibercounter+=1
-                    index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]=fibercounter
+        #temporarily make these as enormous as possible:
+        thresh_dirs_array=np.zeros([AFD_img_fsl[0].header.get_data_shape()[0]*AFD_img_fsl[0].header.get_data_shape()[1]*AFD_img_fsl[0].header.get_data_shape()[2],3,1])
+        mt_fixel_array=np.zeros([AFD_img_fsl[0].header.get_data_shape()[0]*AFD_img_fsl[0].header.get_data_shape()[1]*AFD_img_fsl[0].header.get_data_shape()[2],1,1])
+
+        counter=0
+        #for i in range(AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2])
+        for i in range(len(voxels[0])):#for just the mask
+            fibercounter=0
+            for l in range(max_fibers):
+                #ASSUMING ORDERED and stopping at 3:
+                if (l<3):
+                    if AFD_img_fsl[l].get_data()[voxels[0][i],voxels[1][i],voxels[2][i]]>AFD_thresh:
+                        if (index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]==0):#set on first fiber
+
+                            index_array[voxels[0][i],voxels[1][i],voxels[2][i],1]=counter
+                        thresh_dirs_array[counter,0,0]=-1*fiber_dirs_img_fsl[l].get_data()[voxels[0][i],voxels[1][i],voxels[2][i],0]
+                        thresh_dirs_array[counter,1,0]=fiber_dirs_img_fsl[l].get_data()[voxels[0][i],voxels[1][i],voxels[2][i],1]
+                        thresh_dirs_array[counter,2,0]=fiber_dirs_img_fsl[l].get_data()[voxels[0][i],voxels[1][i],voxels[2][i],2]
+
+                        if (just_b0):
+                            mt_fixel_array[counter,0,0]=MT_array_zeroed[voxels[0][i],voxels[1][i],voxels[2][i],0]
+                        #print("%d\n" % t1_fixel_array[counter,0,0])
+                        else:
+                            mt_fixel_array[counter,0,0]=MT_array_zeroed[voxels[0][i],voxels[1][i],voxels[2][i],l]
+                        counter+=1
+                        fibercounter+=1
+                        index_array[voxels[0][i],voxels[1][i],voxels[2][i],0]=fibercounter
+    else: ##mrtix AFDs
+        new_size = [AFD_img.header.get_data_shape()[0], AFD_img.header.get_data_shape()[1],
+                    AFD_img.header.get_data_shape()[2], 2]
+        index_array = np.zeros(new_size)
+
+        # temporarily make these as enormous as possible:
+        thresh_dirs_array = np.zeros([AFD_img.header.get_data_shape()[0] * AFD_img.header.get_data_shape()[1] *
+                                      AFD_img.header.get_data_shape()[2], 3, 1])
+        mt_fixel_array = np.zeros([AFD_img.header.get_data_shape()[0] * AFD_img.header.get_data_shape()[1] *
+                                   AFD_img.header.get_data_shape()[2], 1, 1])
+
+        counter = 0
+        # for i in range(AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2])
+        for i in range(len(voxels[0])):  # for just the mask
+            fibercounter = 0
+            AFD_f1 = AFD_img.get_data()[voxels[0][i], voxels[1][i], voxels[2][i], 0]  # largest fiber population
+            for l in range(max_fibers):
+                # ASSUMING ORDERED and stopping at 3:
+                if (l < 3):
+                    if AFD_img.get_data()[voxels[0][i], voxels[1][i], voxels[2][i], l] > AFD_thresh:
+                    #if AFD_img.get_data()[voxels[0][i], voxels[1][i], voxels[2][i], l] >=AFD_f1*AFD_thresh:
+                        if (index_array[voxels[0][i], voxels[1][i], voxels[2][i], 0] == 0):  # set on first fiber
+
+                            index_array[voxels[0][i], voxels[1][i], voxels[2][i], 1] = counter
+                        thresh_dirs_array[counter, 0, 0] = fiber_dirs_img.get_data()[
+                            voxels[0][i], voxels[1][i], voxels[2][i], 3 * l]
+                        thresh_dirs_array[counter, 1, 0] = fiber_dirs_img.get_data()[
+                            voxels[0][i], voxels[1][i], voxels[2][i], 3 * l + 1]
+                        thresh_dirs_array[counter, 2, 0] = fiber_dirs_img.get_data()[
+                            voxels[0][i], voxels[1][i], voxels[2][i], 3 * l + 2]
+
+                        if (just_b0):
+                            mt_fixel_array[counter, 0, 0] = MT_array_zeroed[voxels[0][i], voxels[1][i], voxels[2][i], 0]
+                        # print("%d\n" % t1_fixel_array[counter,0,0])
+                        else:
+                            mt_fixel_array[counter, 0, 0] = MT_array_zeroed[voxels[0][i], voxels[1][i], voxels[2][i], l]
+                        counter += 1
+                        fibercounter += 1
+                        index_array[voxels[0][i], voxels[1][i], voxels[2][i], 0] = fibercounter
                 
          
     if not os.path.exists(myargs.fixel_dir_name[0]):
         os.makedirs(myargs.fixel_dir_name[0])
                
-    index_img = nib.Nifti2Image(index_array,AFD_img.affine)
-    
-    
-    nib.save(index_img, myargs.fixel_dir_name[0]+"/index.nii")
-    
-    
-    
-    thresh_dirs_img=nib.Nifti2Image(thresh_dirs_array[0:counter,0:3,0],AFD_img.affine)
-    
-    
-    nib.save(thresh_dirs_img, myargs.fixel_dir_name[0]+"/directions.nii") 
-    
-    
-    mt_fixel_img=nib.Nifti2Image(mt_fixel_array[0:counter,0,0],AFD_img.affine) 
-    
-    
-    nib.save(mt_fixel_img, myargs.fixel_dir_name[0]+"/mt_fixel.nii") 
+    if (bedpostx):
+        index_img = nib.Nifti2Image(index_array,AFD_img_fsl[0].affine)
+        nib.save(index_img, myargs.fixel_dir_name[0]+"/index.nii")
+        thresh_dirs_img=nib.Nifti2Image(thresh_dirs_array[0:counter,0:3,0],AFD_img_fsl[0].affine)
+        nib.save(thresh_dirs_img, myargs.fixel_dir_name[0]+"/directions.nii")
+        mt_fixel_img=nib.Nifti2Image(mt_fixel_array[0:counter,0,0],AFD_img_fsl[0].affine)
+        nib.save(mt_fixel_img, myargs.fixel_dir_name[0]+"/mt_fixel.nii")
+    else:
+        index_img = nib.Nifti2Image(index_array,AFD_img.affine)
+        nib.save(index_img, myargs.fixel_dir_name[0]+"/index.nii")
+        thresh_dirs_img=nib.Nifti2Image(thresh_dirs_array[0:counter,0:3,0],AFD_img.affine)
+        nib.save(thresh_dirs_img, myargs.fixel_dir_name[0]+"/directions.nii")
+        mt_fixel_img=nib.Nifti2Image(mt_fixel_array[0:counter,0,0],AFD_img.affine)
+        nib.save(mt_fixel_img, myargs.fixel_dir_name[0]+"/mt_fixel.nii")
 
         
 #Visualize: 
