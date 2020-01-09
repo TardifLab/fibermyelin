@@ -71,9 +71,8 @@ on_true_afd_thresh = True
 # NOTE - when running fibermyelin_pipeline.py, set afdthresh = 0.0 so that T1 is calculated for ALL fibers in a voxel
 # fibermyelin_pipeline treats within-voxel T1 times in 1 of 2 ways (depending on fiber AFD):
 # 1) if any fibers in the voxel are super-true_afd_thresh, T1 times of sub-true_afd_tresh fibers are set to the weighted average of super-thresh fiber T1 times
-# 2) if only sub-true_afd_thresh fibers in the voxel, these fiber T1 times are set to zero (better way of dealing with this?)
-# Outcome - same final T1 image/fixel dimensions as initial afd/directions image/fixel dimensions, smoother tract T1 maps, zeroes will present in tract T1 maps (need to be manually masked out as of Dec. 4, 2019)
-# Note - best thing would be to set the threshold to the lowest afd value, not zero. 
+# 2) if only sub-true_afd_thresh fibers in the voxel, these fiber T1 times are calculated using the SE-IR equation 
+# Outcome - same final T1 image/fixel dimensions as initial afd/directions image/fixel dimensions, smoother tract T1 maps
 
 #for visualization W/L:
 #asparagus 500-800,1500
