@@ -1,6 +1,6 @@
 # fibermyelin
 
-# Operation of FiberT1Solver with fiber T1 averaging in the voxel (branch SE-no-IE_voxel_T1_averaging)
+## Operation of FiberT1Solver with fiber T1 averaging in the voxel (branch SE-no-IE_voxel_T1_averaging)
 
 ## To do before running FiberT1Solver:
 - Set true_afd_thresh in FiberT1Solver.py (line 60) and in fibermyelin_pipeline.py (line 62). This threshold is equivalent to     the afdthresh we have always been using.
