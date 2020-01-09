@@ -27,7 +27,7 @@ global plot_fit
 plot_fit=False
 
 global just_b0
-just_b0=True #have to set here and in calling script fibermyelin_pipeline.py, a
+just_b0=False #have to set here and in calling script fibermyelin_pipeline.py, a
 
 global simulate #currently only for Dpar eq, not just b0,
 simulate=False
@@ -54,6 +54,10 @@ global fix_vic
 fix_vic=False
 global fixed_vic
 fixed_vic=0.6
+
+# This must also be set in fibermyelin_pipeline.py 
+global true_afd_thresh
+true_afd_thresh = 0.2   # afd threshold for determining which signal equation to use in a voxel
 
 #this is the only option right now:
 #global mean_field_tort
@@ -145,7 +149,7 @@ class FiberT1Solver:
 
         elif (just_b0):
             if (not set_noIE):
-                self.init_params=np.zeros(4) #T1 for each fiber
+                self.init_params=np.zeros(4)  
                 self.lowerbounds=np.zeros(4)
                 self.upperbounds=np.zeros(4)
             else:
@@ -684,62 +688,41 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
                 if (set_Dpar_equal):
                     #params[i] is T1 for fiber i
                     #inversion efficiency IE is params[numfibers+3]
-                    if (not set_noIE):
-                        term2=SteadyStateT1Recov(params[numfibers+3], B1, TIs[h], TR, TE, params[i])
+                    if (not set_noIE):  # at the start of the fitting process, params contains the init_params?
+                        term2=SteadyStateT1Recov(params[numfibers+3], B1, TIs[h], TR, TE, params[i])  # function of params[numfibers+3]==IE, B1, TIs, TR, TE, params[i]==(T1 of fiber i)
                     else:
                         term2=SteadyStateT1RecovnoIE(B1, TIs[h], TR, TE, params[i])
 
                     #GE ver:
                     #term2=1-2*params[numfibers+3]*np.exp(-1.0*TIs[h]/params[i])+np.exp(-1.0*TR/params[i])
 
-
-
                 #else:  #not set_Dpar_equal not implemented right  now
                 #params[2*i] is T1 for fiber i
 
-
-
                     #GE ver:
                     #term2=1-2*np.exp(-1.0*TIs[h]/params[2*i])+np.exp(-1.0*TR/params[2*i])
-
-
 
                 if (fix_D_phantom3):
                     Dpar=args[h,11+6*i]
                     Dperp=args[h,12+6*i]
 
-
                 else: #(not fix_D_phantom3), i.e., everything else:
-
-
                     if (set_Dpar_equal):
                         Dpar=params[numfibers]
                     else:  #not implemented right now
                     #params[2*i+1] is Dpar
                         Dpar=params[2*i+1]
 
-
-
-
-
                     #this is the low-density mean-field tortuosity approximation, and is probably incorrect for realistically tight axonal packing
                     #hardcoded for b=1000; HERE change if b is not 1000!
                     Dperp=-np.log((1-vic)*np.exp(-(1-vic)*Dpar*1000)+vic)/1000
 
-
-
                 D=np.zeros([3,3])
-
-
 
                 #D in coord system of fiber dir and orth vectors (f,v_orth1,v_orth2)
                 D=np.array([[Dpar, 0, 0],[0, Dperp, 0],[0, 0, Dperp]])
 
-
-
-
                 #g in coordinate system of fiber i:
-
                 gnew=[gnewx[h,i], gnewy[h,i], gnewz[h,i]]
 
                 #DO as numpy matrix dot product  (note not matrix mult)
@@ -750,21 +733,41 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
 
                 #print("Dterm %f" % Dterm)                  
 
-                term3=np.exp(-bvals[h]*Dterm)
-
-
+                term3=np.exp(-bvals[h]*Dterm) # diffusion term for the IR-DWI signal equation 
 
                 #print("term1 %f term2 %f term3 %f" % (term1, term2, term3))
 
-                eq[h]+=term1*term2*term3
+                #eq[h]+=term1*term2*term3 # taken care of in the block below  
 
-            #now add CSF term:
-            if (not set_noIE):
-                eq[h]=(1-viso)*eq[h]+viso*(np.exp(-bvals[h]*CSF_D)*SteadyStateT1Recov(params[numfibers+3], B1, TIs[h], TR, TE, CSF_T1))
-            else:
+# added December 10, 2019
+                if all(i <= true_afd_thresh for i in AFD):   # eq[h]+= means a new term is added for each fiber in the voxel... don't want this in voxels with all subthresh fibers so set eq[h] = term2, where term2 is the same for each fiber
+                    eq[h] = term2  # if all fibers are sub-afd-threshold, use the just_b0 / SE-IR term only for this voxel's signal equation (no afd or diffusion terms), using the T1 of the last fiber in the voxel 
+                elif (not all(i <= true_afd_thresh for i in AFD)):
+                    eq[h] += term1*term2*term3 # if there is at least one superthreshold fiber in the voxel, include the diffusion terms for this voxel's signal equation             
+# NOTES on the above block
+# In voxels with only subthreshold fibers, eq[h] is set to term2 for the final fiber in the voxel
+# Result of this - T1s are not calculated for the other fibers in the voxel
+# Solution - calculate T1 using the SE-IR signal equation for the last fiber in the voxel, then replace the initialized T1 times of the other fibers with the calculated T1 of the final fiber (done in fibermyelin_pipeline.py ~line 463)
+
+            # Add the viso and CSF terms to the signal equation if there is at least one superthreshold fiber in the voxel, otherwise use the SE-IR equation only 
+            if (all(i <= true_afd_thresh for i in AFD) and (not set_noIE)): 
+                eq[h] = eq[h]  # Leave the equation as-is (i.e. SE-IR) for voxels with only subthreshold fibers 
+            elif ((not all(i <= true_afd_thresh for i in AFD)) and (not set_noIE)): # if there are any supperthreshold fibers in 
+		eq[h]=(1-viso)*eq[h]+viso*(np.exp(-bvals[h]*CSF_D)*SteadyStateT1Recov(params[numfibers+3], B1, TIs[h], TR, TE, CSF_T1))
+            elif (set_noIE): # no IE equation 
                 eq[h] = (1 - viso) * eq[h] + viso * (np.exp(-bvals[h] * CSF_D) * SteadyStateT1RecovnoIE(B1, TIs[h], TR, TE, CSF_T1))
+# added December 10, 2019
 
-        else: #just_b0
+
+# original / before Dec. 10, 2019, replaced by the above block
+#            #now add CSF term:
+#            if (not set_noIE):
+#                eq[h]=(1-viso)*eq[h]+viso*(np.exp(-bvals[h]*CSF_D)*SteadyStateT1Recov(params[numfibers+3], B1, TIs[h], TR, TE, CSF_T1))
+#            else:
+#                eq[h] = (1 - viso) * eq[h] + viso * (np.exp(-bvals[h] * CSF_D) * SteadyStateT1RecovnoIE(B1, TIs[h], TR, TE, CSF_T1))
+# original / before Dec. 10, 2019
+
+        else: #just_b0 -- this does not add a term for each fiber since fibers are not counted 
             if (not set_noIE):
                 term2=SteadyStateT1Recov(params[3], B1, TIs[h], TR, TE, params[0])
             else:
@@ -773,18 +776,14 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
             #GE ver
             #term2=1-2*np.exp(-1.0*TIs[h]/params[0])+np.exp(-1.0*TR/params[0])
 
-            eq[h]+=term2
-
-
-
+            eq[h]+=term2 # for just b0, outside the fiber loop so there is only one term2 per voxel 
 
         #take magnitude, mult by S0, and add Johnson noise term neta:
         #params[2*numfibers+1] is S0
         #params[2*numfibers] is noise term neta, currently added for ALL images
 
-
         if (set_Dpar_equal):
-            sig[h]=sqrt((params[numfibers+2]*eq[h])**2+params[numfibers+1]**2)
+            sig[h]=sqrt((params[numfibers+2]*eq[h])**2+params[numfibers+1]**2) 
         elif (just_b0):
             sig[h]=sqrt((params[2]*eq[h])**2+params[1]**2)
         else:  #Dpar not equal, not implemented
@@ -794,8 +793,7 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
     #if (numfibers>1):
         #print("Dpar: %f %f; T1: %f %f; SOS residuals: %f" % (params[1], params[3], params[0], params[2], np.sum(np.square(out))))
 
-
-    return out
+    return out # difference between calculated and observed signal at datapoint h
 
 def SignedIRDiffEqn(params,*args): #equation for predicted signal; params is vector of the unknowns
     #copied from IRDiffEqn(params,*args) with the final section modified to output signed signal not magnitude residual
