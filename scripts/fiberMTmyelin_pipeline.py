@@ -111,6 +111,8 @@ parser.add_argument('-fixel',dest='fixel_dir_name', help='output MTR fixel direc
 parser.add_argument('-Dpar', dest='Dpar_image_filename', help='output D_parallel filename', required=False, nargs=1)              
 parser.add_argument('-vis', dest='visualize', help='visualize previously computed fiber MTs', required=False, action='store_true')
 parser.add_argument('-sort', dest='sortMT', help='print out previously computed fiber MTs in 2-fiber voxels, sorted by orientation', required=False, action='store_true')
+#parser.add_argument('-sim_eq', dest='sim_eq', help='simulate the MT-diff equation using the synthetic MT values (input in )', required=False, action='store_true')
+parser.add_argument('-mtr_in', dest='mtr_in_image_filename', help='Optional MTR synthetic filename: pre-computed MTR filename if -sim_eq option is selected', required=False, nargs=1)
 
 myargs = parser.parse_args()
 
@@ -173,6 +175,8 @@ else:
     if myargs.B1_image_filename:
         B1_img=nib.Nifti2Image.from_image(nib.load(myargs.B1_image_filename[0]))
 
+if (myargs.mtr_in_image_filename):
+    MT_in_img=nib.Nifti2Image.from_image(nib.load(myargs.mtr_in_image_filename[0]))
     
 #For visualize, sort, and full computation:  
 #AFD_img=nib.load(myargs.afd_image_filename[0])    
@@ -304,7 +308,7 @@ if not (myargs.visualize or myargs.sortMT):
     
     MT_array = np.zeros(AFD_img.header.get_data_shape())
     Dparfit_array = np.zeros(AFD_img.header.get_data_shape())
-    
+    cost_array = np.zeros(AFD_img.header.get_data_shape()[0:3])
    
        
     for j in range(len(voxels[0])):
@@ -354,6 +358,12 @@ if not (myargs.visualize or myargs.sortMT):
 
         else:
             B1=1.0
+
+        if myargs.mtr_in_image_filename:
+            MTin=MT_in_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j]]
+
+        else:
+            MTin=0
         
         MT_DWIs=np.zeros((number_of_contrasts, number_of_DWIs),float)
         
@@ -378,11 +388,12 @@ if not (myargs.visualize or myargs.sortMT):
             
             #to test fixing D, we have to giev it the voxel coord
             
-            mtsolver.SetInputData(fiber_dirs,AFD,MT_DWIs,MTws,grad_table,vic,voxels[0][j],voxels[1][j],voxels[2][j],sagittal,set_Dpar_equal,viso,B1)
+            mtsolver.SetInputData(fiber_dirs,AFD,MT_DWIs,MTws,grad_table,vic,voxels[0][j],voxels[1][j],voxels[2][j],sagittal,set_Dpar_equal,viso,B1,MTin)
             MTs = np.zeros(number_of_fibers)
             Dparfit=np.zeros(number_of_fibers)
             #MTsandDparfit=np.zeros([number_of_fibers,2])
-            MTsandDparfit=mtsolver.GetMTs()
+            fit = mtsolver.GetMTs()
+            MTsandDparfit=fit.x
             
         #hack for just_b0:
         if (just_b0):
@@ -401,8 +412,9 @@ if not (myargs.visualize or myargs.sortMT):
                     print('MT: %d' % MTs[i])
                     print('Dpar: %f' % Dparfit[i])
                 MT_array[voxels[0][j], voxels[1][j], voxels[2][j], i] = MTs[i]
-                
-                Dparfit_array[voxels[0][j], voxels[1][j], voxels[2][j], i] = Dparfit[i]
+                Dparfit_array[voxels[0][j], voxels[1][j], voxels[2][j], i] =  Dparfit[i]
+
+        cost_array[voxels[0][j], voxels[1][j], voxels[2][j]] = fit.cost
         
         #optional: this plots the single voxel right now:
         #t1solver.VisualizeFibers()
@@ -421,7 +433,8 @@ if not (myargs.visualize or myargs.sortMT):
     else:    
         nib.save(Dparfit_img, myargs.Dpar_image_filename[0])
             
-         
+    cost_img = nib.Nifti2Image(cost_array, AFD_img.affine, AFD_img.header)
+    nib.save(cost_img, myargs.fixel_dir_name[0]+"/cost.nii")
                     
     MT_array_zeroed=np.zeros(AFD_img.header.get_data_shape()) 
     
@@ -487,10 +500,10 @@ if not (myargs.visualize or myargs.sortMT):
         index_array = np.zeros(new_size)
 
         # temporarily make these as enormous as possible:
-        thresh_dirs_array = np.zeros([AFD_img.header.get_data_shape()[0] * AFD_img.header.get_data_shape()[1] *
-                                      AFD_img.header.get_data_shape()[2], 3, 1])
-        mt_fixel_array = np.zeros([AFD_img.header.get_data_shape()[0] * AFD_img.header.get_data_shape()[1] *
-                                   AFD_img.header.get_data_shape()[2], 1, 1])
+        #thresh_dirs_array = np.zeros([AFD_img.header.get_data_shape()[0] * AFD_img.header.get_data_shape()[1] *AFD_img.header.get_data_shape()[2], 3, 1])
+        thresh_dirs_array = np.zeros([len(voxels[0])*max_fibers, 3, 1])
+        #mt_fixel_array = np.zeros([AFD_img.header.get_data_shape()[0] * AFD_img.header.get_data_shape()[1] *AFD_img.header.get_data_shape()[2], 1, 1])
+        mt_fixel_array = np.zeros([len(voxels[0])*max_fibers, 1, 1])
 
         counter = 0
         # for i in range(AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2])
