@@ -25,7 +25,7 @@ plot_fit=False
 global just_b0
 just_b0=False #have to set here and in calling script fiberMTmyelin_pipeline.py
 global simulate #currently only for Dpar eq, not just b0,
-simulate=True
+simulate=False
 global sim_noise_level
 sim_noise_level=5 #S0 is hardcoded to 500 below, so 10 is 2%, 15 is 3%
 #sim_noise_level=0
@@ -44,7 +44,7 @@ sim_different_MTs=False
 
 #simulation: will read in values instead of assuming they are all MTR=0.3 (need an additional input)
 global sim_input_MTs
-sim_input_MTs=True
+sim_input_MTs=False
 
 #if True, see hardcoded vic value in IRDiffEq function.
 #0.4: lower than healthy, but a better fit near the noise floor
@@ -87,61 +87,65 @@ from scipy.optimize import least_squares #least_squares
 
 class FiberMTSolver:
     """class to compute MT for each fiber"""
-    
+
     def __init__(self):
         """this class doesn't require anything yet."""
-        
+
     def GetMTs(self):
-        
-       #set initial estimates for the parameters: 
-        
-        
-        
+
+        #set initial estimates for the parameters:
+
         if (set_Dpar_equal):
             #number of params to fit= MTR for each fiber+ 1 Dpar+ neta + S0=number_of_fibers+3
-           self.init_params=np.zeros(self.number_of_fibers+3) 
-           self.lowerbounds=np.zeros(self.number_of_fibers+3)
-           self.upperbounds=np.zeros(self.number_of_fibers+3)
-           for i in range(0,self.number_of_fibers):
-               self.init_params[i]=0.3 #MTR
-               self.lowerbounds[i]=0#0
-               self.upperbounds[i]=1#np.inf#100%
+            self.init_params=np.zeros(self.number_of_fibers+3)
+            self.lowerbounds=np.zeros(self.number_of_fibers+3)
+            self.upperbounds=np.zeros(self.number_of_fibers+3)
+        else: #Dpar for each fiber
+            #number of params to fit= MTR for each fiber+ 1 Dpar+ neta + S0=number_of_fibers+3 + Dpar for every additional fiber
+            self.init_params=np.zeros(self.number_of_fibers+3+self.number_of_fibers-1)
+            self.lowerbounds=np.zeros(self.number_of_fibers+3+self.number_of_fibers-1)
+            self.upperbounds=np.zeros(self.number_of_fibers+3+self.number_of_fibers-1)
 
-           #this sets the fiber MTs to different values if desired
-           if (simulate and sim_different_MTs):
-               if (self.number_of_fibers>1):
-                    for i in range(0,self.number_of_fibers):
-                        self.init_params[i]=0.3+i*0.1 #MTR
+        for i in range(0,self.number_of_fibers):
+            self.init_params[i]=0.3 #MTR
+            self.lowerbounds[i]=0#0
+            self.upperbounds[i]=0.5#np.inf#100%
 
-            #this sets the MTRs based on an input file (for simulation)
-           if (simulate and sim_input_MTs):
-                for i in range(0, self.number_of_fibers):
-                    self.init_params[i] = self.MTin[i]  # MTR from input file
+        #this sets the fiber MTs to different values if desired
+        if (simulate and sim_different_MTs):
+            if (self.number_of_fibers>1):
+                for i in range(0,self.number_of_fibers):
+                    self.init_params[i]=0.3+i*0.1 #MTR
+
+        #this sets the MTRs based on an input file (for simulation)
+        if (simulate and sim_input_MTs):
+            for i in range(0, self.number_of_fibers):
+                self.init_params[i] = self.MTin[i]  # MTR from input file
 
 
-           #Dpar in mm2/s  (all fibers the same)
-           self.init_params[self.number_of_fibers]=1.7E-3 #Dpar in mm2/s
-           self.lowerbounds[self.number_of_fibers]=0.1E-3#0#
-           self.upperbounds[self.number_of_fibers]=5.0E-3#np.inf
+        #Dpar in mm2/s  (all fibers the same)
+        self.init_params[self.number_of_fibers]=1.7E-3 #Dpar in mm2/s
+        self.lowerbounds[self.number_of_fibers]=0.1E-3#0#
+        self.upperbounds[self.number_of_fibers]=5.0E-3#np.inf
 
-           #additional Johnson noise term neta:
-           self.init_params[self.number_of_fibers+1]=0.0
-           self.lowerbounds[self.number_of_fibers+1]=0 
-           self.upperbounds[self.number_of_fibers+1]=np.inf
+        #additional Johnson noise term neta:
+        self.init_params[self.number_of_fibers+1]=0.0
+        self.lowerbounds[self.number_of_fibers+1]=0
+        self.upperbounds[self.number_of_fibers+1]=5
 
-           #unknown S0: this depends very much on the acquisition
-           #to initialize roughly, use MToff and b=0, assume long TR DO change to steady state eq
-           self.init_params[self.number_of_fibers+2] = 500
+        #unknown S0: this depends very much on the acquisition
+        #to initialize roughly, use MToff and b=0, assume long TR DO change to steady state eq
+        self.init_params[self.number_of_fibers+2] = 250
 
-           if (simulate):
-               self.init_params[self.number_of_fibers+2]=sim_S0
+        if (simulate):
+            self.init_params[self.number_of_fibers+2]=sim_S0
 
-           #S0:
-           self.lowerbounds[self.number_of_fibers+2]=0
-           self.upperbounds[self.number_of_fibers+2]=np.inf
-           
-        elif (just_b0):
-            self.init_params=np.zeros(3)        
+        #S0:
+        self.lowerbounds[self.number_of_fibers+2]=0
+        self.upperbounds[self.number_of_fibers+2]=np.inf
+
+        if (just_b0):
+            self.init_params=np.zeros(3)
             self.lowerbounds=np.zeros(3)
             self.upperbounds=np.zeros(3)
             self.number_of_fibers=1
@@ -149,52 +153,30 @@ class FiberMTSolver:
             self.lowerbounds[0]=0#0
             self.upperbounds[0]=1#np.inf# 100%
 
-            #additional Johnson noise term neta:
+          #additional Johnson noise term neta:
             self.init_params[self.number_of_fibers]=0.0
-            self.lowerbounds[self.number_of_fibers]=0 
+            self.lowerbounds[self.number_of_fibers]=0
             self.upperbounds[self.number_of_fibers]=np.inf
 
             #unknown S0: this depends very much on the acquisition
             #to initialize roughly, use MToff and b=0, assume long TR DO change to steady state eq
             self.init_params[self.number_of_fibers+2]=self.MToff[0]
-    
+
             #S0:
             self.lowerbounds[self.number_of_fibers+1]=0
             self.upperbounds[self.number_of_fibers+1]=np.inf
 
-        
-        else:      #if Dpar for each fiber HERE this option is unfinished!!!; need to put fibers at the end so that other params keep their indices, for b0 option too
-            self.init_params=np.zeros(2*self.number_of_fibers+2) #MTR and Dpar for each fiber        
-            self.lowerbounds=np.zeros(2*self.number_of_fibers+2)
-            self.upperbounds=np.zeros(2*self.number_of_fibers+2)
-            for i in range(0,self.number_of_fibers):
-                self.init_params[2*i]=0.3 #MTR
-                self.lowerbounds[2*i]=0#0
-                self.upperbounds[2*i]=1#np.inf#
-                self.init_params[2*i+1]=1.7E-3 #Dpar in mm2/s
-                self.lowerbounds[2*i+1]=0.1E-3#0#
-                self.upperbounds[2*i+1]=5.0E-3#np.inf
-            
-  
-         
-         
-            #additional Johnson noise term neta:         
-            self.init_params[2*self.number_of_fibers]=0.0 #7.544243 is actual noise mean in asparagus phantom
-         
-            #neta:
-            self.lowerbounds[2*self.number_of_fibers]=0 
-            self.upperbounds[2*self.number_of_fibers]=np.inf
-         
-            #unknown S0: this depends very much on the acquisition
-            #to initialize roughly, use MToff and b=0, assume long TR DO change to steady state eq
-            self.init_params[self.number_of_fibers+2]=self.MToff[0]
-    
-            #S0:
-            self.lowerbounds[2*self.number_of_fibers+1]=0
-            self.upperbounds[2*self.number_of_fibers+1]=np.inf
+
+        if not (set_Dpar_equal):      #if Dpar for each fiber HERE this option is unfinished!!!; need to put fibers at the end so that other params keep their indices, for b0 option too
+            # let's just add the other Dpars at the end of all params, to not mess with all the ordering
+            for i in range(0,self.number_of_fibers-1):
+                self.init_params[self.number_of_fibers+3+i]=1.7E-3 #Dpar in mm2/s
+                self.lowerbounds[self.number_of_fibers+3+i]=0.1E-3#0#
+                self.upperbounds[self.number_of_fibers+3+i]=5.0E-3#np.inf
 
 
-        
+
+
         #we have number of contrasts * number of bvalues observations (for MTR we have 2 contrasts MTon and MToff)
         # need to string them all out and add the constants to each observation
         #fastest varying will be diffusion, then MT
@@ -405,8 +387,11 @@ class FiberMTSolver:
 
             #add noise on two channels: we do want to do this
             newargs[:,1]=np.sqrt(np.square(sim_data+[random.gauss(0,sim_noise_level) for i in range(len(sim_data))])+np.square([random.gauss(0,sim_noise_level) for i in range(len(sim_data))]))
-               
-        #fit the equation: there are a lot of options here; user can modify this call
+
+            #write out the simulated data to a file
+
+
+        #f the equation: there are a lot of options here; user can modify this call
         #bounds could be implemented for 'lm'
         
             
@@ -416,9 +401,10 @@ class FiberMTSolver:
         
         #trf, more b0s, 3-point jacobian computation:
         res_lsq = least_squares(MTDiffEqn, self.init_params, method='trf', bounds=tuple([self.lowerbounds,self.upperbounds]),args=newargs, jac='3-point')
-        
-        
-        #lm: 
+
+        #res_lsq = least_squares(MTDiffEqn, self.init_params, method='trf',bounds=tuple([self.lowerbounds, self.upperbounds]), args=newargs, jac='3-point', verbose=2)
+
+    #lm:
         #res_lsq = least_squares(MTDiffEqn, self.init_params, method='lm',args=newargs)
         
         #lm, more b0s:
@@ -427,7 +413,7 @@ class FiberMTSolver:
      
         
         print "fit status %i" %  res_lsq.status       
-        if (not res_lsq.success):            
+        if (not res_lsq.success or res_lsq.status==0 ):      #status=0 means it reached max iterations
             return None
         
         #print all fitted parameters:
@@ -782,14 +768,13 @@ def MTDiffEqn(params,*args): #equation for residuals; params is vector of the un
             for i in range(0,numfibers):             
                 term1=norm_AFD[i]
                 #term1=AFD[i]
-                
-                if (set_Dpar_equal):
 
-                    #params[i] is MT-term for fiber i
-                    if (MTws[h]>=1): # if there is MT weighting
-                        term2 = 1-params[i]
-                    else:
-                        term2 =1 #no MT weigthing
+
+                #params[i] is MT-term for fiber i
+                if (MTws[h]>=1): # if there is MT weighting
+                    term2 = 1-params[i]
+                else:
+                    term2 =1 #no MT weigthing
 
                 #else:  #not set_Dpar_equal not implemented right  now
 
@@ -801,11 +786,14 @@ def MTDiffEqn(params,*args): #equation for residuals; params is vector of the un
                 else: #(not fix_D_phantom3), i.e., everything else:
                    
                     
-                    if (set_Dpar_equal):
+                    if(set_Dpar_equal):
                         Dpar=params[numfibers]
-                    else:  #not implemented right now
-                    #params[2*i+1] is Dpar
-                        Dpar=params[2*i+1]
+                    else: #Dpar for each fiber
+                        if(i>0):
+                            #params[numfibers+3+i], 1st is right after MT for each fiber, others are at end
+                            Dpar=params[numfibers+2+i]
+                        else:
+                            Dpar = params[numfibers]
 
 
                     #this is the low-density mean-field tortuosity approximation, and is probably incorrect for realistically tight axonal packing
@@ -859,20 +847,22 @@ def MTDiffEqn(params,*args): #equation for residuals; params is vector of the un
         #mult by S0, and add Johnson noise term neta:
         #params[numfibers+2] is S0
         #params[numfibers+1] is noise term neta, currently added for ALL images
-        
 
-        if (set_Dpar_equal):
+        #if (set_Dpar_equal):
+        if True: #this should work for set_Dpar_equal or not
             #sig[h]=params[numfibers+2]*eq[h]+params[numfibers+1]
             sig[h] = params[numfibers+2]*eq[h] #IRL take out neta for now
         elif (just_b0):
             sig[h]=sqrt((params[numfibers+1]*eq[h])**2+params[numfibers]**2)
-        else:  #Dpar not equal, not implemented
-            sig[h]=sqrt((params[2*numfibers+1]*eq[h])**2+params[2*numfibers]**2)
+        #else:  #Dpar not equal, not implemented
+        #    sig[h]=sqrt((params[2*numfibers+1]*eq[h])**2+params[2*numfibers]**2)
         out[h] = sig[h]-obs[h]
         
-    #if (numfibers>1):
-        #print("Dpar: %f %f; T1: %f %f; SOS residuals: %f" % (params[1], params[3], params[0], params[2], np.sum(np.square(out))))
-    
+    if (numfibers>1):
+        print("Dpar: %f; MT: %f %f; S0: %f SOS residuals: %f" % (params[2], params[0], params[1], params[4], np.sum(np.square(out))))
+    else:
+        print("Dpar: %f; MT: %f; S0: %f SOS residuals: %f" % (params[1], params[0], params[3], np.sum(np.square(out))))
+
     
     return out
 
@@ -968,8 +958,8 @@ def MTDiffEqn_signal(params, *args):   #equation for predicted signal; params is
                     if (set_Dpar_equal):
                         Dpar = params[numfibers]
                     else:  # not implemented right now
-                        # params[2*i+1] is Dpar
-                        Dpar = params[2 * i + 1]
+                        # params[numfibers+3 + i] is Dpar2, Dpar3 etc
+                        Dpar = params[numfibers+3 + i]
 
                     # this is the low-density mean-field tortuosity approximation, and is probably incorrect for realistically tight axonal packing
                     # hardcoded for b=1000; HERE change if b is not 1000!

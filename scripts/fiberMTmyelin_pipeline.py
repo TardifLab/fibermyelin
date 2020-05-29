@@ -309,7 +309,7 @@ if not (myargs.visualize or myargs.sortMT):
     MT_array = np.zeros(AFD_img.header.get_data_shape())
     Dparfit_array = np.zeros(AFD_img.header.get_data_shape())
     cost_array = np.zeros(AFD_img.header.get_data_shape()[0:3])
-   
+    neta_array = np.zeros(AFD_img.header.get_data_shape()[0:3])
        
     for j in range(len(voxels[0])):
         
@@ -393,9 +393,18 @@ if not (myargs.visualize or myargs.sortMT):
             Dparfit=np.zeros(number_of_fibers)
             #MTsandDparfit=np.zeros([number_of_fibers,2])
             fit = mtsolver.GetMTs()
-            MTsandDparfit=fit.x
-            
-        #hack for just_b0:
+            print('j: %f' % j)
+            if (fit is not None):
+                MTsandDparfit=fit.x
+                cost_array[voxels[0][j], voxels[1][j], voxels[2][j]] = fit.cost
+                neta_array[voxels[0][j], voxels[1][j], voxels[2][j]] = MTsandDparfit[number_of_fibers + 1]
+
+            else:
+                MTsandDparfit =None
+                cost_array[voxels[0][j], voxels[1][j], voxels[2][j]] =0
+                neta_array[voxels[0][j], voxels[1][j], voxels[2][j]] = 0
+
+                #hack for just_b0:
         if (just_b0):
             number_of_fibers=1
             
@@ -407,15 +416,17 @@ if not (myargs.visualize or myargs.sortMT):
                     print('MT: %f' % MTs[i])
                     print('Dpar: %f' % Dparfit[i])
                 else:
-                    MTs[i]=MTsandDparfit[2*i]
-                    Dparfit[i]=MTsandDparfit[2*i+1]
-                    print('MT: %d' % MTs[i])
+                    MTs[i]=MTsandDparfit[i]
+                    if(i>0):
+                        Dparfit[i] = MTsandDparfit[number_of_fibers+2+i]
+                    else:
+                        Dparfit[i]=MTsandDparfit[number_of_fibers]
+                    print('MT: %f' % MTs[i])
                     print('Dpar: %f' % Dparfit[i])
                 MT_array[voxels[0][j], voxels[1][j], voxels[2][j], i] = MTs[i]
                 Dparfit_array[voxels[0][j], voxels[1][j], voxels[2][j], i] =  Dparfit[i]
 
-        cost_array[voxels[0][j], voxels[1][j], voxels[2][j]] = fit.cost
-        
+
         #optional: this plots the single voxel right now:
         #t1solver.VisualizeFibers()
     
@@ -435,6 +446,8 @@ if not (myargs.visualize or myargs.sortMT):
             
     cost_img = nib.Nifti2Image(cost_array, AFD_img.affine, AFD_img.header)
     nib.save(cost_img, myargs.fixel_dir_name[0]+"/cost.nii")
+    neta_img = nib.Nifti2Image(neta_array, AFD_img.affine, AFD_img.header)
+    nib.save(neta_img, myargs.fixel_dir_name[0] + "/neta.nii")
                     
     MT_array_zeroed=np.zeros(AFD_img.header.get_data_shape()) 
     
