@@ -36,6 +36,32 @@ sim_noise_level=15 #S0 is hardcoded to 500 below, so 10 is 2%, 15 is 3%
 global sim_S0
 sim_S0=500
 
+global avg_tensor #use a fixed tensor for all fibers
+avg_tensor = False
+global avg_Dpar
+global avg_Dperp
+#avg_Dpar = 0.00151984
+#avg_Dperp = 0.00029019
+# only b=1000 shell
+avg_Dpar = 0.00164679
+avg_Dperp = 0.000363085
+
+#10th percentile skiniest
+#avg_Dpar =0.001938
+#avg_Dperp = 2.33E-4
+
+#10th percentile fattest
+#avg_Dpar =0.001355
+#avg_Dperp = 4.93E-4
+
+# FA =0
+#avg_Dpar = 0.00164679
+#avg_Dperp = 0.00164679
+
+# FA =1
+#avg_Dpar = 0.00164679
+#avg_Dperp = 0
+
 global set_noIE
 set_noIE=False
 
@@ -121,8 +147,12 @@ class FiberT1Solver:
 
             #Dpar in mm2/s  (all fibers the same)
             self.init_params[self.number_of_fibers]=1.7E-3 #Dpar in mm2/s
-            self.lowerbounds[self.number_of_fibers]=0.1E-3#0#
-            self.upperbounds[self.number_of_fibers]=5.0E-3#np.inf
+            self.lowerbounds[self.number_of_fibers] = 0.1E-3  # 0#
+            self.upperbounds[self.number_of_fibers] = 5.0E-3  # np.inf
+            if avg_tensor: #the better way would be to re-write the code so it doesn't fit this param at all...
+                self.init_params[self.number_of_fibers] = avg_Dpar  # Dpar in mm2/s
+                self.lowerbounds[self.number_of_fibers]=avg_Dpar-1E-6# don't let it vary
+                self.upperbounds[self.number_of_fibers]=avg_Dpar+1E-6# don't let it vary
 
             #additional Johnson noise term neta:
             self.init_params[self.number_of_fibers+1]=0.0
@@ -705,6 +735,9 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
                 if (fix_D_phantom3):
                     Dpar=args[h,11+6*i]
                     Dperp=args[h,12+6*i]
+                elif (avg_tensor):
+                    Dpar = avg_Dpar
+                    Dperp = avg_Dperp
 
                 else: #(not fix_D_phantom3), i.e., everything else:
                     if (set_Dpar_equal):
@@ -794,6 +827,7 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
         #print("Dpar: %f %f; T1: %f %f; SOS residuals: %f" % (params[1], params[3], params[0], params[2], np.sum(np.square(out))))
 
     return out # difference between calculated and observed signal at datapoint h
+
 
 def SignedIRDiffEqn(params,*args): #equation for predicted signal; params is vector of the unknowns
     #copied from IRDiffEqn(params,*args) with the final section modified to output signed signal not magnitude residual
