@@ -37,14 +37,20 @@ for i=1:size(c,2)
     cross(i,:) = str2double(strsplit(c{1,i},' '));
 end
 
-%get rid of 0s
-pop1 = nonzeros(pop1);
-pop2 = nonzeros(pop2);
+%get rid of 0s and 4000s
+%pop1 = nonzeros(pop1);pop1 = pop1(pop1<4000);
+%pop2 = nonzeros(pop2);pop1 = pop1(pop1<4000);
+%cross1 = nonzeros(cross(:,1)); cross1=cross1(cross1<4000);
+%cross2 = nonzeros(cross(:,2)); cross2=cross2(cross2<4000);
+pop1 = rmoutliers(pop1);
+pop2 = rmoutliers(pop2);
+cross1 = rmoutliers(cross(:,1));
+cross2 = rmoutliers(cross(:,2));
 
 pop1_meanT1 = mean(pop1); pop1_sigmaT1 = std(pop1); %calculate the mean T1s and the standard deviation of the T1s
-pop1_crossings_meanT1 = mean(cross(:,1)); pop1_crossings_sigmaT1 = std(cross(:,1));
+pop1_crossings_meanT1 = mean(cross1); pop1_crossings_sigmaT1 = std(cross1);
 pop2_meanT1 = mean(pop2); pop2_sigmaT1 = std(pop2);
-pop2_crossings_meanT1 = mean(cross(:,2)); pop2_crossings_sigmaT1 = std(cross(:,2));
+pop2_crossings_meanT1 = mean(cross2); pop2_crossings_sigmaT1 = std(cross2);
 
 sigmas = [round(pop1_sigmaT1,0) round(pop2_sigmaT1,0) round(pop1_crossings_sigmaT1,0) round(pop2_crossings_sigmaT1,0)]; % sigma list so the bars are put at the correct position on the plot
 
@@ -54,10 +60,10 @@ xpos = [1.5 1.6 1.8 1.9]; % set the position of the boxes so that like ones are 
 
 figure; % Make the figure 
 
-box1 = pop1; % Make and fill the boxes 
-box2 = pop2;
-box3 = cross(:,1);
-box4 = cross(:,2);
+box1 = pop1'; % Make and fill the boxes 
+box2 = pop2';
+box3 = cross1;
+box4 = cross2;
 
 boxes = [box1; box2; box3; box4]; % Store the boxes
 g = [zeros(length(box1),1); ones(length(box2),1); 2*ones(length(box3),1); 3*ones(length(box4),1)]; % Place the content of the boxes
@@ -123,14 +129,14 @@ set(gca,'xticklabel',{'Single fibers','Crossings'});
 
 fig = gcf;
 fig.PaperUnits = 'inches';
-fig.PaperPosition = [0 0 6.9 3.4]; % Rectangular figure size for MRM
+fig.PaperPosition = [0 0 8 5]; % Rectangular figure size for MRM
 %fig.PaperPosition = [0 0 3.42 3]; % square figure size for MRM
 
 %print('T1_BOX_PONS-CST-ROI_6p9x4p_simplified','-dpng','-r0') % Save the figure as a .png image
 thresh = 0.05;
 
 [h_singles,p_singles] = ttest2(pop1,pop2);  % do the t-test // If the crossings are the same as the singles - is good!
-[h_crossings,p_crossings] = ttest2(cross(:,1),cross(:,2));
+[h_crossings,p_crossings] = ttest2(cross1,cross2);
 
 disp(' ');
 disp('Singles:');
@@ -149,11 +155,11 @@ text(2,ystart-50,tt,'FontSize',11); % add the star to the legend
 
 % now compare singles and crossings of the same pop
 disp('Population 1');
-[h,p] = ttest2(pop1,cross(:,1))  % do the t-test // If the crossings are the same as the singles - is good!
+[h,p] = ttest2(pop1,cross1)  % do the t-test // If the crossings are the same as the singles - is good!
 tt = strcat('pop1 (s vx x): ',num2str(p));
 text(2,ystart-100,tt,'FontSize',11); 
 disp('Population 2');
-[h,p] = ttest2(pop2,cross(:,2))
+[h,p] = ttest2(pop2,cross2)
 tt = strcat('pop2 (s vx x): ',num2str(p));
 text(2,ystart-150,tt,'FontSize',11); 
 
