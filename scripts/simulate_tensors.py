@@ -43,22 +43,23 @@ else:
     for i in range(0, iters):
 
         # run the sim with 3% noise
-        tensor_output_iter = '/data_/tardiflab/ilana/midiff_mgh/ir_diff_2p5_20190926_123841/avg-tensor/sim_equation-diff-T1-same-MD/2pc-0pcT1-p35p65-So500/T1_00{}'.format(
+        tensor_output_iter = '/data_/tardiflab/ilana/midiff_mgh/ir_diff_2p5_20190926_123841/avg-tensor/sim_equation-diff-T1-same-MD/2pc-10pcT1-p5p5-diffTI/T1_00{}'.format(
             str(i))
 
         subprocess.call(['/data/mril/mril5/ilana/bin/fibermyelin/scripts/fibermyelin_pipeline.py',
                          '-t1', tensor_output_iter,
                          '-Dpar',
-                         '/data_/tardiflab/ilana/midiff_mgh/ir_diff_2p5_20190926_123841/avg-tensor/sim_equation-diff-T1-same-MD/2pc-0pcT1-p35p65-So500/Dpar.nii',
+                         '/data_/tardiflab/ilana/midiff_mgh/ir_diff_2p5_20190926_123841/avg-tensor/sim_equation-diff-T1-same-MD/2pc-10pcT1-p5p5-diffTI/Dpar.nii',
                          '-mask', '/data_/tardiflab/ilana/midiff_mgh/ir_diff_2p5_20190926_123841/avg-tensor/sim_equation-diff-T1/mask.nii',
                          '-vic', '/data_/tardiflab/ilana/midiff_mgh/ir_diff_2p5_20190926_123841/hardi-analysis/AMICO/NODDI/FIT_ICVF-strides.nii.gz',
-                         '-afd', '/data_/tardiflab/ilana/midiff_mgh/ir_diff_2p5_20190926_123841/avg-tensor/sim_equation-diff-T1/new-afd-p35p65.nii',
+                         '-afd', '/data_/tardiflab/ilana/midiff_mgh/ir_diff_2p5_20190926_123841/avg-tensor/sim_equation-diff-T1/new-afd.nii',
                          '-afdthresh', '0.1',
                          '-dirs',
                          '/data_/tardiflab/ilana/midiff_mgh/ir_diff_2p5_20190926_123841/avg-tensor/sim_equation-diff-T1/new-directions.nii',
                          '-IRdiff',
                          '/data_/tardiflab/ilana/midiff_mgh/ir_diff_2p5_20190926_123841/ir-analysis/ir-diff-strides.nii',
-                         '-TIs', '/data_/tardiflab/ilana/midiff_mgh/ir_diff_2p5_20190926_123841/TIcomb.txt',
+                         #'-TIs', '/data_/tardiflab/ilana/midiff_mgh/ir_diff_2p5_20190926_123841/TIcomb.txt',
+                         '-TIs', '/data_/tardiflab/ilana/midiff_mgh/ir_diff_2p5_20190926_123841/avg-tensor/sim_equation-diff-T1-same-MD/2pc-10pcT1-p5p5-diffTI/TIlong.txt',
                          '-ADin',
                          '/data_/tardiflab/ilana/midiff_mgh/ir_diff_2p5_20190926_123841/avg-tensor/sim_equation-diff-T1-same-MD/new-AD.nii',
                          '-RDin',
@@ -69,5 +70,5 @@ else:
                          '-TR', '3000',
                          '-TE', '56',
                          '-fixel',
-                         '/data_/tardiflab/ilana/midiff_mgh/ir_diff_2p5_20190926_123841/avg-tensor/sim_equation-diff-T1-same-MD/2pc-0pcT1-p35p65-So500/'])
+                         '/data_/tardiflab/ilana/midiff_mgh/ir_diff_2p5_20190926_123841/avg-tensor/sim_equation-diff-T1-same-MD/2pc-10pcT1-p5p5-diffTI/'])
 
