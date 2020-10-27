@@ -1,4 +1,19 @@
 # fibermyelin
+
+Estimating orientation-specific T1 values in combined inversion recovery and diffusion (IR-diff) data.
+
+## Pre-processing
+Locate all required inputs
+`irdiff_preprocess.pl`
+
+## Average tensor estimation and un-shuffling
+`irdiff_pipeline.py`
+ - Compute an average tensor from HARDI data
+ - Un-shuffle the IR-diff data, such that each slice is ordered by TI
+
+## T1 estimation
+`fibermyelin_pipeline.py`
+
 <!--
 Operation of FiberT1Solver with afd-weighted fiber T1 averaging in a voxel
 
