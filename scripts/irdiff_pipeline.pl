@@ -109,12 +109,19 @@ print "\n---Now remove 1st b=0 (which is just there for steady-state)----\n";
 $numavg = `more info.txt | grep numavg | grep -Eo '[0-9]+'`;chomp($numavg);
 $numdiff = `more info.txt | grep directions | grep -Eo '[0-9]+'`;chomp($numdiff);
 $totframes = $numavg*$numdiff;
-print "fslroi $ufov1 ir-analysis/unshuffle_fov1-remb0.nii $numavg $totframes-$numavg\n";
-`fslroi $ufov1 ir-analysis/unshuffle_fov1-remb0.nii $numavg $totframes-$numavg` unless -e "ir-analysis/unshuffle_fov1-remb0.nii";
-print "fslroi $ufov2 ir-analysis/unshuffle_fov2-remb0.nii $numavg $totframes-$numavg\n";
-`fslroi $ufov2 ir-analysis/unshuffle_fov2-remb0.nii $numavg $totframes-$numavg` unless -e "ir-analysis/unshuffle_fov2-remb0.nii";
+#print "fslroi $ufov1 ir-analysis/unshuffle_fov1-remb0.nii $numavg $totframes-$numavg\n";
+#`fslroi $ufov1 ir-analysis/unshuffle_fov1-remb0.nii $numavg $totframes-$numavg` unless -e "ir-analysis/unshuffle_fov1-remb0.nii";
+#print "fslroi $ufov2 ir-analysis/unshuffle_fov2-remb0.nii $numavg $totframes-$numavg\n";
+#`fslroi $ufov2 ir-analysis/unshuffle_fov2-remb0.nii $numavg $totframes-$numavg` unless -e "ir-analysis/unshuffle_fov2-remb0.nii";
 
-print "-------Now combine the 2 datasets-------\n";
+# don't know why the above doesn't work anymore... says bad alloc
+print "mrconvert -coord 3 $numavg:end $ufov1 ir-analysis/unshuffle_fov1-remb0.nii\n";
+`mrconvert -coord 3 $numavg:end $ufov1  ir-analysis/unshuffle_fov1-remb0.nii` unless -e "ir-analysis/unshuffle_fov1-remb0.nii";
+print "mrconvert -coord 3 $numavg:end $ufov2 ir-analysis/unshuffle_fov2-remb0.nii\n";
+`mrconvert -coord 3 $numavg:end $ufov2  ir-analysis/unshuffle_fov2-remb0.nii` unless -e "ir-analysis/unshuffle_fov2-remb0.nii";
+
+
+print "\n-------Now combine the 2 datasets-------\n";
 # we need to muck around or else it does not combine properly
 `gunzip ir-analysis/*.gz` unless -e "ir-analysis/unshuffle_fov1-remb0.nii";
 print "\ncomb_fov('ir-analysis/unshuffle_fov1-remb0.nii','ir-analysis/unshuffle_fov2-remb0.nii','TI.txt','ir-analysis/ir-diff.nii')\n";
@@ -224,11 +231,11 @@ if ($eddy) {
 #if this file exists don't run through everyting
 $done=0;
 if (-e "fixel_dir/afd.mif"){print "HARDI processing seems to be done...\n"; $done=1;}
-if ($done==0){
+#if ($done==0){
 
 ### Fiber response estimation  
-print "dwi2response tournier $dwi resp.txt\nshview resp.txt\n";
-`dwi2response tournier $dwi resp.txt` unless -e "resp.txt";
+print "dwi2response tournier $dwi resp.txt -voxels single.nii\nshview resp.txt\n";
+`dwi2response tournier $dwi resp.txt -voxels single.nii` unless -e "resp.txt";
 `shview resp.txt`;
 
 ### Constrained spherical deconvolution  
@@ -250,7 +257,39 @@ print "fod2fixel -mask mask.mif fod.mif -afd afd.mif fixel_dir\n";
 #Colored by direction  
 `mrview meanb0.mif -fixel.load fixel_dir/directions.mif`;
 
-}
+#}
+
+
+## Now use the average tensor instead of NODDI
+# use the b=1000 sheel from hardi and find the average tensor in the single fiber voxels
+# use this as a fixed parameter in the fitting
+print "\n\n=======Using the average tensor instead of NODDI========\n";
+print "\n-----Extract the b=1000 shell\n";
+print "dwiextract -shells 0,1000 $dwi dwi_dn-1000shell.mif\n";
+`dwiextract -shells 0,1000 $dwi dwi_dn-1000shell.mif` unless -e "dwi_dn-1000shell.mif";
+
+print "\n-----Compute tensor from b=1000 shell\n";
+print"dwi2tensor dwi_dn-1000shell.mif dt_1000.mif\n";
+`dwi2tensor dwi_dn-1000shell.mif dt_1000.mif` unless -e "dt_1000.mif";
+print "tensor2metric dt_1000.mif -ad ad.mif -rd rd.mif\n";
+`tensor2metric dt_1000.mif -ad ad.mif -rd rd.mif` unless -e "rd.mif";
+
+print "mrstats ad.mif -output mean -mask single.nii\n";
+$dpar = `mrstats ad.mif -output mean -mask single.nii`;
+#Dpar = 0.00164679
+
+print "Average dpar is $dpar\n\n";
+
+print "mrstats rd.mif -output mean -mask single.nii\n";
+$dperp = `mrstats rd.mif -output mean -mask single.nii`;
+#Dperp = 0.000363085
+
+print "Average dperp is $dperp\n\n";
+
+print "\n---Get the average S0 which will be fixed in the fitting\n";
+print "mrconvert meanb0.mif meanb0_.nii\n";
+`mrconvert meanb0.mif meanb0_.nii` unless -e "meanb0_.nii";
+$meanb0  = "meanb0_.nii";
 
 ## Now prepare everything for the fibermyelin processing
 print "\n=====Pre-process for fiber-myelin=====\n";
@@ -299,8 +338,8 @@ print "fslswapdim noddi/brain_mask-swap.nii  -x y z noddi/brain_mask-swap-stride
 `fslswapdim noddi/brain_mask-swap.nii -x y z  noddi/brain_mask-swap-strides.nii` unless -e "noddi/brain_mask-swap-strides.nii.gz";
 
 print "\n---------Check everything is lined up!-------\n";
-print "fsleyes ../ir-analysis/ir-diff-strides.nii* afd_voxel_strides.nii* AMICO/NODDI/FIT_ICVF-strides.nii* noddi/brain_mask-swap-strides.nii*\n";
-`fsleyes ../ir-analysis/ir-diff-strides.nii* afd_voxel_strides.nii* AMICO/NODDI/FIT_ICVF-strides.nii* noddi/brain_mask-swap-strides.nii*`;
+print "/usr/local/bin/fsleyes ../ir-analysis/ir-diff-strides.nii* afd_voxel_strides.nii* AMICO/NODDI/FIT_ICVF-strides.nii* noddi/brain_mask-swap-strides.nii* $meanb0\n";
+`/usr/local/bin/fsleyes ../ir-analysis/ir-diff-strides.nii* afd_voxel_strides.nii* AMICO/NODDI/FIT_ICVF-strides.nii* noddi/brain_mask-swap-strides.nii* $meanb0`;
 
 
 
@@ -327,15 +366,21 @@ $TE = `more ../info.txt | grep TE | grep -Eo '[0-9]+'`;chomp($TE); #in ms
 #chomp($afd_thresh);
 $afd_thresh=0.2;
 `mkdir fixel_dir-output` unless -e "fixel_dir-output";
-print "fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR -TE $TE -fixel fixel_dir-output\n";
 
-`fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output`;
+# this is the old method using vic
+#print "fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR -TE $TE -fixel fixel_dir-output\n";
+#fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output`;
+
+# this is the newer way using a fixed average tensor and fixed S0
+print "\n\nfibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -S0 $meanb0 -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR -TE $TE -fixel fixel_dir-output\n";
+`fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -S0 $meanb0 -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output`;
+
 
 # mrview V1.mif -fixel.load fixel_dir-output/t1_fixel.nii
 
 ## Now generate a file with the sorted T1 by direction
 # right now it's hard-coded in fibermyelin_pipeline.py but it could be an input
-print "fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output -sort > t1sort.txt\n";
+print "\n\nfibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output -sort > t1sort.txt\n";
 
 `fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output -sort > t1sort.txt`;
 
