@@ -60,10 +60,13 @@ if ($done eq "") {
     print "dcm2nii -o nii $dcmdir/*fov2/*\n";
     `dcm2nii -o nii $dcmdir/*fov2/*`;
 }
-$done=`\\ls nii/*cmrrmbep2d*.nii*`; chomp($done); 
+#$done=`\\ls nii/*cmrrmbep2d*.nii*`; chomp($done);
+$done=`\\ls nii/*ep2ddiff*.nii*`; chomp($done); 
 if ($done eq "") {
-    print "dcm2nii -o nii $dcmdir/cmrr_mbep2d_diff_multib*/*\n";
-    `dcm2nii -o nii $dcmdir/cmrr_mbep2d_diff_multib*/*`;
+    #print "dcm2nii -o nii $dcmdir/cmrr_mbep2d_diff_multib*/*\n";
+    #`dcm2nii -o nii $dcmdir/cmrr_mbep2d_diff_multib*/*`;
+    print "dcm2nii -o nii $dcmdir/ep2d_diff/*\n";
+    `dcm2nii -o nii $dcmdir/ep2d_diff/*`;
 }
 
 #$hardi_nii = `\\ls nii/*cmrrmbep2ddiff*.nii*`; chomp($hardi_nii);
