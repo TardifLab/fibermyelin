@@ -24,7 +24,7 @@ import random
 #hardcoded global vars:
 
 global plot_fit
-plot_fit=True
+plot_fit=False
 
 global just_b0
 just_b0 = False #have to set here and in calling script fibermyelin_pipeline.py, a
@@ -59,8 +59,8 @@ global avg_Dperp
 #avg_Dperp = 0.000342671
 
 # from Aug 21 2020 (run2) dataset (b=1000 shell) and all single fiber voxels
-avg_Dpar = 0.00163619
-avg_Dperp = 0.000371012
+#avg_Dpar = 0.00163619
+#avg_Dperp = 0.000371012
 
 # for the asparagus scan on Jan 29, 2019
 #avg_Dpar = 0.00150316
@@ -74,9 +74,10 @@ avg_Dperp = 0.000371012
 #avg_Dpar = 14.9E-04
 #avg_Dperp = 3.8E-04
 
-# if we use the whole brain and consider single fibers having AFD1>0.5 and AFD2<0.2
-#avg_Dpar = 0.00115081
-#avg_Dperp = 5.453165E-04
+## using original submission data ir_diff_2p5_20190926_123841
+avg_Dpar = 0.00164679
+avg_Dperp = 0.000363085
+
 
 global fix_tensor #use input AD and RD to fix tensor, don't fit it
 fix_tensor=False
