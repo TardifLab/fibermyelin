@@ -46,6 +46,7 @@ sim_different_MTs=False
 global sim_input_MTs
 sim_input_MTs=False
 
+
 #if True, see hardcoded vic value in IRDiffEq function.
 #0.4: lower than healthy, but a better fit near the noise floor
 #I recommend actually computing it instead
@@ -87,6 +88,7 @@ from scipy.optimize import least_squares #least_squares
 
 class FiberMTSolver:
     """class to compute MT for each fiber"""
+<<<<<<< HEAD
 
     def __init__(self):
         """this class doesn't require anything yet."""
@@ -166,17 +168,39 @@ class FiberMTSolver:
             self.lowerbounds[self.number_of_fibers+1]=0
             self.upperbounds[self.number_of_fibers+1]=np.inf
 
+        
+        else:      #if Dpar for each fiber HERE this option is unfinished!!!; need to put fibers at the end so that other params keep their indices, for b0 option too
+            self.init_params=np.zeros(2*self.number_of_fibers+2) #MTR and Dpar for each fiber        
+            self.lowerbounds=np.zeros(2*self.number_of_fibers+2)
+            self.upperbounds=np.zeros(2*self.number_of_fibers+2)
+            for i in range(0,self.number_of_fibers):
+                self.init_params[2*i]=0.3 #MTR
+                self.lowerbounds[2*i]=0#0
+                self.upperbounds[2*i]=1#np.inf#
+                self.init_params[2*i+1]=1.7E-3 #Dpar in mm2/s
+                self.lowerbounds[2*i+1]=0.1E-3#0#
+                self.upperbounds[2*i+1]=5.0E-3#np.inf
+            
+  
+         
+         
+            #additional Johnson noise term neta:         
+            self.init_params[2*self.number_of_fibers]=0.0 #7.544243 is actual noise mean in asparagus phantom
+         
+            #neta:
+            self.lowerbounds[2*self.number_of_fibers]=0 
+            self.upperbounds[2*self.number_of_fibers]=np.inf
+         
+            #unknown S0: this depends very much on the acquisition
+            #to initialize roughly, use MToff and b=0, assume long TR DO change to steady state eq
+            self.init_params[self.number_of_fibers+2]=self.MToff[0]
+    
+            #S0:
+            self.lowerbounds[2*self.number_of_fibers+1]=0
+            self.upperbounds[2*self.number_of_fibers+1]=np.inf
 
-        if not (set_Dpar_equal):      #if Dpar for each fiber HERE this option is unfinished!!!; need to put fibers at the end so that other params keep their indices, for b0 option too
-            # let's just add the other Dpars at the end of all params, to not mess with all the ordering
-            for i in range(0,self.number_of_fibers-1):
-                self.init_params[self.number_of_fibers+3+i]=1.7E-3 #Dpar in mm2/s
-                self.lowerbounds[self.number_of_fibers+3+i]=0.1E-3#0#
-                self.upperbounds[self.number_of_fibers+3+i]=5.0E-3#np.inf
 
-
-
-
+        
         #we have number of contrasts * number of bvalues observations (for MTR we have 2 contrasts MTon and MToff)
         # need to string them all out and add the constants to each observation
         #fastest varying will be diffusion, then MT
@@ -356,22 +380,14 @@ class FiberMTSolver:
         
         #to weight b=0 more (instead of actually acquiring more), repeat N more times:        
 
-        #N = np.int(0.1*(self.number_of_diff_encodes-1))-1
-        #newargs = np.zeros((self.number_of_contrasts*self.number_of_diff_encodes+self.number_of_contrasts*N,10+6*self.number_of_fibers))
-        #for i in range(self.number_of_contrasts*self.number_of_diff_encodes):
-        #    newargs[i,:]=args[i,:]
         #don't add b=0s, there are already some in the acquisition
-        #for j in range(self.number_of_contrasts):
-        #    for i in range(N):
-
-        #       newargs[self.number_of_contrasts*self.number_of_diff_encodes+j*N+i,:]=args[j*self.number_of_contrasts,:]      #the b=0 for that TI
-
         newargs = args
               
                 
         if (simulate):#simulate data for these input fibers and AFDs:
             #NOTE this is just for Dpar eq case
             #default params, except potentially different MTRs and no neta
+
             new_params=np.copy(self.init_params)
             new_params[self.number_of_fibers+1]=0.0 #neta
 
@@ -391,7 +407,8 @@ class FiberMTSolver:
             #write out the simulated data to a file
 
 
-        #f the equation: there are a lot of options here; user can modify this call
+        #fit the equation: there are a lot of options here; user can modify this call
+
         #bounds could be implemented for 'lm'
         
             
@@ -405,6 +422,7 @@ class FiberMTSolver:
         #res_lsq = least_squares(MTDiffEqn, self.init_params, method='trf',bounds=tuple([self.lowerbounds, self.upperbounds]), args=newargs, jac='3-point', verbose=2)
 
     #lm:
+
         #res_lsq = least_squares(MTDiffEqn, self.init_params, method='lm',args=newargs)
         
         #lm, more b0s:
@@ -414,6 +432,8 @@ class FiberMTSolver:
         
         print "fit status %i" %  res_lsq.status       
         if (not res_lsq.success or res_lsq.status==0 ):      #status=0 means it reached max iterations
+
+
             return None
         
         #print all fitted parameters:
@@ -525,14 +545,13 @@ class FiberMTSolver:
                 mt1=np.arange(0, 1, 0.05).tolist()
                 mt2=np.arange(0, 1, 0.05).tolist()
                 MSE = np.zeros([len(mt1), len(mt2)])
-                params=res_lsq.x
                 for g in range(len(mt1)):
                     for h in range(len(mt2)):
-                        params[0]=mt1[g]
-                        params[1]=mt2[h]
-                        pred_sig_res=MTDiffEqn(params,newargs)
+                        res_lsq.x[0]=mt1[g]
+                        res_lsq.x[1]=mt2[h]
+                        pred_sig_res=MTDiffEqn(res_lsq.x,newargs)
                         summation=0
-                        #compute the mean-squared-error
+
                         for p in range (len(pred_sig_res)):
                             squared_difference = pred_sig_res[p]**2
                             summation = summation + squared_difference
@@ -622,7 +641,7 @@ class FiberMTSolver:
                 print ("afd2 %f" % afd2[tmp[0,1]])
 
 
-                #==============================================================================
+
 #         for i in range(0,self.number_of_fibers):
 #             if (not just_b0):
 #                 self.T1s[i]=res_lsq.x[2*i]
@@ -644,6 +663,7 @@ class FiberMTSolver:
         
     #DO: potentially just give inputs upon initialization, or will we reuse? give inputs to GetT1s?    
     def SetInputData(self,fiber_dirs,AFDs,MT_DWIs,MTws,grad_table,vic,vox0,vox1,vox2,sag,Dpareq,viso,B1,MTin):
+
         
         
                 
@@ -669,6 +689,7 @@ class FiberMTSolver:
         self.B1=B1
 
         self.MTin=MTin #this is used for simulation when MT is used an an input sim_input_MTs=True
+
              
         self.vox0=vox0
         self.vox1=vox1
@@ -778,6 +799,7 @@ def MTDiffEqn(params,*args): #equation for residuals; params is vector of the un
 
                 #else:  #not set_Dpar_equal not implemented right  now
 
+
                 if (fix_D_phantom3):                     
                     Dpar=args[h,11+6*i] 
                     Dperp=args[h,12+6*i] 
@@ -800,6 +822,7 @@ def MTDiffEqn(params,*args): #equation for residuals; params is vector of the un
                     #hardcoded for b=1000; HERE change if b is not 1000!
                     Dperp=-np.log((1-vic)*np.exp(-(1-vic)*Dpar*1500)+vic)/1500
                     #Dperp = Dperp/2 #IRL reduce the anisotropy
+
                       
                 D=np.zeros([3,3])
                 
@@ -847,6 +870,7 @@ def MTDiffEqn(params,*args): #equation for residuals; params is vector of the un
         #mult by S0, and add Johnson noise term neta:
         #params[numfibers+2] is S0
         #params[numfibers+1] is noise term neta, currently added for ALL images
+<<<<<<< HEAD
 
         #if (set_Dpar_equal):
         if True: #this should work for set_Dpar_equal or not
@@ -1017,6 +1041,7 @@ def MTDiffEqn_signal(params, *args):   #equation for predicted signal; params is
 
     # if (numfibers>1):
     # print("Dpar: %f %f; T1: %f %f; SOS residuals: %f" % (params[1], params[3], params[0], params[2], np.sum(np.square(out))))
+
 
     return out
 
