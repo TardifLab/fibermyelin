@@ -432,7 +432,8 @@ if not (myargs.visualize or myargs.sortT1):
 
         #TRs=TRs_allslices[voxels[2][j]] #HERE do this when have the whole TR history in signal comp.
 
-
+        S0out = 0
+        cost = 0
         if (number_of_fibers>0):
             t1solver=FiberT1Solver()
 
@@ -441,8 +442,7 @@ if not (myargs.visualize or myargs.sortT1):
             t1solver.SetInputData(fiber_dirs,AFD,IR_DWIs,TIs,grad_table,vic,S0,T1B0,TR,TE,voxels[0][j],voxels[1][j],voxels[2][j],sagittal,set_Dpar_equal,viso,B1,AD,RD)
             T1s=np.zeros(number_of_fibers)
             Dparfit=np.zeros(number_of_fibers)
-            S0out = 0
-            cost = 0
+
 
             T1sandDparfit=np.zeros([number_of_fibers,2])
             FullFit =t1solver.GetT1s()
@@ -467,7 +467,6 @@ if not (myargs.visualize or myargs.sortT1):
                 T1s=np.zeros(number_of_fibers)
                 Dparfit=np.zeros(number_of_fibers)
                 T1sandDparfit=np.zeros(number_of_fibers+1)
-
 
         for i in range(0,number_of_fibers):
             if (T1sandDparfit is not None):
