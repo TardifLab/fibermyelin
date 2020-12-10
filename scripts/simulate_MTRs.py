@@ -41,6 +41,8 @@ import argparse
 #mrconvert -stride 1,2,3 sim_equation/roi-crossings.mif sim_equation/roi_crossings.nii
 # not sure how to save, just a volume for each iteration and merge at the end?
 
+#remmeber to set simulate and sim_input_MTs to True
+
 parser = argparse.ArgumentParser(description='')
 
 parser.add_argument('-o', dest='myresult_output_filename', help='output filename (.npy file). Optional', required=False, nargs=1)
@@ -48,7 +50,7 @@ parser.add_argument('-load', dest='myresult_input_filename', help='input filenam
 
 myargs = parser.parse_args()
 
-iters=100
+iters=33
 
 if (myargs.myresult_input_filename):
     myresult = np.load(myargs.myresult_input_filename)
@@ -80,30 +82,55 @@ else:
                                 # '-bvecs', '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/nii/eddy_corrected_data-on-off.bvecs',
                                 # '-fixel', '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/sim-equation-iters/'])
 
-        mtr_output_iter = '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/sim-equation-iters-1pc/mtr_00{}'.format(
+        #mtr_output_iter = '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/sim-equation-iters-1pc/mtr_00{}'.format(
+        #str(i))
+
+        #subprocess.call(['/data/mril/mril5/ilana/bin/fibermyelin/scripts/fiberMTmyelin_pipeline.py',
+        #             # '-mtr', '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/sim-equation-iters/mtr.nii',
+        #             '-mtr', mtr_output_iter,
+        #             '-Dpar',
+        #              '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/sim-equation-iters-1pc/Dpar.nii',
+        #              '-mask', '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/mask.nii.gz',
+        #              '-vic', '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/new-icvf.nii',
+        #              '-afd', '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/new-afd.nii',
+        #              '-afdthresh', '0.1',
+        #              '-dirs',
+        #              '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/new-directions.nii',
+        #              '-MTdiff',
+        #              '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/eddy_corrected_data-on-off-strides.nii',
+        #              '-mtr_in', '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/new-mtr.nii',
+        #              '-mtw', '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/mt.txt',
+        #              '-bvals', '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/nii/on-off.bval',
+        #              '-bvecs',
+        #              '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/nii/eddy_corrected_data-on-off.bvecs',
+        #              '-fixel',
+        #              '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/sim-equation-iters-1pc/'])
+
+
+        mtr_output_iter = '/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/sim/1pc-mtrb0/mtr_00{}'.format(
         str(i))
 
         subprocess.call(['/data/mril/mril5/ilana/bin/fibermyelin/scripts/fiberMTmyelin_pipeline.py',
                      # '-mtr', '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/sim-equation-iters/mtr.nii',
                      '-mtr', mtr_output_iter,
                      '-Dpar',
-                     '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/sim-equation-iters-1pc/Dpar.nii',
-                     '-mask', '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/mask.nii.gz',
-                     '-vic', '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/new-icvf.nii',
-                     '-afd', '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/new-afd.nii',
+                     '/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/sim/1pc-mtrb0/Dpar.nii',
+                     '-mask', '/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/sim/mask.nii.gz',
+                     '-afd', '/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/sim/new-afd.nii',
                      '-afdthresh', '0.1',
                      '-dirs',
-                     '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/new-directions.nii',
+                     '/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/sim/new-directions.nii',
                      '-MTdiff',
-                     '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/eddy_corrected_data-on-off-strides.nii',
-                     '-mtr_in', '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/new-mtr.nii',
-                     '-mtw', '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/mt.txt',
-                     '-bvals', '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/nii/on-off.bval',
-                     '-bvecs',
-                     '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/nii/eddy_corrected_data-on-off.bvecs',
+                     '/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/mt-diff-strides.nii',
+                     '-mtr_in', '/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/sim/new-mtr.nii',
+                     '-mtw', '/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/mt.txt',
+                     '-bvals', '/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/bvals',
+                     '-bvecs','/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/bvec',
+                     '-AD','0.00155058',
+                     '-RD','0.000316716',
+                     '-mtrB0','/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/sim/mtr-b0.nii',
                      '-fixel',
-                     '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/sim-equation-iters-1pc/'])
-
+                     '/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/sim/1pc-mtrb0/'])
 #break into singles and crossings:
     #subprocess.call(['fslmaths', 'sim-equation-1000/mtr.nii', '-mul', 'roi_singles.nii', 'sim-equation-1000/mtr_singles.nii'])
     #subprocess.call(['fslmaths', 'sim-equation-1000/mtr.nii','-mul', 'roi_crossings.nii', 'sim-equation-1000/mtr_crossings.nii'])

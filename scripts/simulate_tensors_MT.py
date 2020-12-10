@@ -43,10 +43,10 @@ else:
     for i in range(0, iters):
 
         # run the sim with 3% noise
-        tensor_output_iter = '/data_/tardiflab/ilana/midiff_mgh/ir_diff_2p5_20190926_123841/avg-tensor/sim_equation-diff-T1-same-MD/2pc-10pcT1-p5p5-diffTI/T1_00{}'.format(
+        tensor_output_iter = '/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/sim/2pc-10pcMT-p5p5/T1_00{}'.format(
             str(i))
 
-        subprocess.call(['/data/mril/mril5/ilana/bin/fibermyelin/scripts/fibermyelin_pipeline.py',
+        subprocess.call(['/data/mril/mril5/ilana/bin/fibermyelin/scripts/fiberMTmyelin_pipeline.py',
                          '-t1', tensor_output_iter,
                          '-Dpar',
                          '/data_/tardiflab/ilana/midiff_mgh/ir_diff_2p5_20190926_123841/avg-tensor/sim_equation-diff-T1-same-MD/2pc-10pcT1-p5p5-diffTI/Dpar.nii',
