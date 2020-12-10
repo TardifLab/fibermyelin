@@ -20,6 +20,8 @@ from dipy.core.gradients import gradient_table
 import vtk
 #import sys
 import argparse
+import os.path
+from os import path
 
 #constants:
 EPSILON=9E-9
@@ -92,20 +94,21 @@ NB: the fixel directory output is mandatory and only works properly for axial im
 parser = argparse.ArgumentParser(description='')
 
 parser.add_argument('-mask', dest='mask_image_filename', help='input mask filename, for computation or visualization. If for visualization, must be the same mask previously used for computation', required=True, nargs=1)
-parser.add_argument('-vic', dest='vic_image_filename', help='input vic filename, for computation only.', required=True, nargs=1)
+parser.add_argument('-vic', dest='vic_image_filename', help='input vic filename, for computation only.', required=False, nargs=1)
 parser.add_argument('-afd', dest='afd_image_filename', help='input AFD filename, currently required even for -vis', required=True, nargs=1)
 parser.add_argument('-afdthresh', dest='AFD_thresh', help='input AFD threshold, required.  For -vis option, AFD threshold must be that used to compute the pre-computed T1 map', required=True, nargs=1)
 parser.add_argument('-dirs', dest='dirs_image_filename', help='input directions filename, currently required even for -vis', required=True, nargs=1)
-#parser.add_argument('-IRdiff', dest='IR_diff_image_filename', help='input IR diffusion weighted image series; required for full computation',  required=False, nargs=1)                     
 parser.add_argument('-MTdiff', dest='MT_diff_image_filename', help='input MT diffusion weighted image series; required for full computation',  required=False, nargs=1)                     
 parser.add_argument('-mtw', dest='MTs_filename', help='input text file of MT weighting for each volume',  required=False, nargs=1)                   
+parser.add_argument('-mtrB0', dest='mtrB0_image_filename', help='input computed mtr b=0 filename, optinally used as initial guess in fits', required=False, nargs=1)
+parser.add_argument('-AD', dest='AD', help='average axial diffusivity',  required=True, nargs=1)
+parser.add_argument('-RD', dest='RD', help='average axial diffusivity',  required=True, nargs=1)
 parser.add_argument('-bvals', dest='bvals_filename', help='input text file of bvals; required for full computation',  required=False, nargs=1)                     
 parser.add_argument('-bvecs', dest='bvecs_filename', help='input text file of bvecs; required for full computation',  required=False, nargs=1)                     
 #parser.add_argument('-TR', dest='TR', help='input nominal TR for short-TR steady state equation (ms)',required=True,nargs=1)
 #parser.add_argument('-TE', dest='TE', help='input nominal TE for short-TR steady state equation (ms)',required=True,nargs=1)
 parser.add_argument('-viso', dest='viso_image_filename', help='input viso filename, for computation only. Optional', required=False, nargs=1)
 parser.add_argument('-B1', dest='B1_image_filename', help='input B1 filename, for computation only. Optional', required=False, nargs=1)
-#parser.add_argument('-t1', dest='t1_image_filename', help='T1 filename: output filename if doing full computation; pre-computed T1 filename if -vis option is selected', required=True, nargs=1)
 parser.add_argument('-mtr', dest='mtr_image_filename', help='MTR filename: output filename if doing full computation; pre-computed MTR filename if -vis option is selected', required=True, nargs=1)
 parser.add_argument('-fixel',dest='fixel_dir_name', help='output MTR fixel directory name; currently implemented only for axial images!!', required=True, nargs=1)
 parser.add_argument('-Dpar', dest='Dpar_image_filename', help='output D_parallel filename', required=False, nargs=1)              
@@ -164,16 +167,26 @@ myargs = parser.parse_args()
 #it might work to use strides -1,2,3, but I haven't tested it.
 #I used script fix_NODDI_trans
 
+## following our experience and reviews for ir-diff, we are no longer using voxel-wise vic, but instead an average tensor, described by 
+## an axial and radial diffusivity (avg_Dpar and avg_Dperp)
+
 if (myargs.visualize or myargs.sortMT):
     MT_array=nib.load(myargs.mt_image_filename[0]).get_data()
 else:
+    if path.exists(myargs.fixel_dir_name[0]):
+        print ("output directory %s exists, overwriting content\n", myargs.fixel_dir_name[0])
+    else:
+        os.mkdir(myargs.fixel_dir_name[0])
 
     MT_diff_img = nib.Nifti2Image.from_image(nib.load(myargs.MT_diff_image_filename[0]))
-    vic_img = nib.Nifti2Image.from_image(nib.load(myargs.vic_image_filename[0]))
+    if myargs.vic_image_filename:
+        vic_img = nib.Nifti2Image.from_image(nib.load(myargs.vic_image_filename[0]))
     if myargs.viso_image_filename:
         viso_img=nib.Nifti2Image.from_image(nib.load(myargs.viso_image_filename[0]))
     if myargs.B1_image_filename:
         B1_img=nib.Nifti2Image.from_image(nib.load(myargs.B1_image_filename[0]))
+    if myargs.mtrB0_image_filename:
+        mtrB0_img=nib.Nifti2Image.from_image(nib.load(myargs.mtrB0_image_filename[0]))
 
 if (myargs.mtr_in_image_filename):
     MT_in_img=nib.Nifti2Image.from_image(nib.load(myargs.mtr_in_image_filename[0]))
@@ -223,6 +236,8 @@ AFD_thresh=float(myargs.AFD_thresh[0])
 
 #TR=float(myargs.TR[0])
 #TE=float(myargs.TE[0])
+avg_Dpar=float(myargs.AD[0])
+avg_Dperp=float(myargs.RD[0])
 
 
 #HERE
@@ -338,14 +353,18 @@ if not (myargs.visualize or myargs.sortMT):
             
         
       
-        
+        print('\n---Fit [%i/%i]' % (voxelcounter, len(voxels[0])))
         print('\n number_of_fibers %i:' % number_of_fibers)
         print(fiber_dirs)
         print("AFDs:")
         print(AFD)
 
 
-        vic=vic_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j]]
+        if myargs.vic_image_filename:
+            vic=vic_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j]]
+            print('vic: %f' % viso)
+        else:
+            vic=0
 
         if myargs.viso_image_filename:
             viso=viso_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j]]
@@ -355,15 +374,20 @@ if not (myargs.visualize or myargs.sortMT):
 
         if myargs.B1_image_filename:
             B1=B1_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j]]
-
         else:
             B1=1.0
 
         if myargs.mtr_in_image_filename:
             MTin=MT_in_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j]]
-
         else:
             MTin=0
+        if myargs.mtrB0_image_filename:
+            mtrB0=mtrB0_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j]]
+            if mtrB0 < 0: #this can happen in noisy areas
+                mtrB0 = 0
+            print('mtr of b=0: %f' % mtrB0)
+        else:
+            mtrB0=0.3 #the initial value for T1
         
         MT_DWIs=np.zeros((number_of_contrasts, number_of_DWIs),float)
         
@@ -388,12 +412,11 @@ if not (myargs.visualize or myargs.sortMT):
             
             #to test fixing D, we have to giev it the voxel coord
             
-            mtsolver.SetInputData(fiber_dirs,AFD,MT_DWIs,MTws,grad_table,vic,voxels[0][j],voxels[1][j],voxels[2][j],sagittal,set_Dpar_equal,viso,B1,MTin)
+            mtsolver.SetInputData(fiber_dirs,AFD,MT_DWIs,MTws,grad_table,avg_Dpar,avg_Dperp,mtrB0,vic,voxels[0][j],voxels[1][j],voxels[2][j],sagittal,set_Dpar_equal,viso,B1,MTin)
             MTs = np.zeros(number_of_fibers)
             Dparfit=np.zeros(number_of_fibers)
             #MTsandDparfit=np.zeros([number_of_fibers,2])
             fit = mtsolver.GetMTs()
-            print('j: %f' % j)
             if (fit is not None):
                 MTsandDparfit=fit.x
                 cost_array[voxels[0][j], voxels[1][j], voxels[2][j]] = fit.cost
@@ -403,6 +426,8 @@ if not (myargs.visualize or myargs.sortMT):
                 MTsandDparfit =None
                 cost_array[voxels[0][j], voxels[1][j], voxels[2][j]] =0
                 neta_array[voxels[0][j], voxels[1][j], voxels[2][j]] = 0
+
+                
 
                 #hack for just_b0:
         if (just_b0):
@@ -425,6 +450,8 @@ if not (myargs.visualize or myargs.sortMT):
                     print('Dpar: %f' % Dparfit[i])
                 MT_array[voxels[0][j], voxels[1][j], voxels[2][j], i] = MTs[i]
                 Dparfit_array[voxels[0][j], voxels[1][j], voxels[2][j], i] =  Dparfit[i]
+            else: #if fit failed set MT to b=0 value in all fibers
+                MT_array[voxels[0][j], voxels[1][j], voxels[2][j], i] = mtrB0
 
 
         #optional: this plots the single voxel right now:
@@ -456,7 +483,7 @@ if not (myargs.visualize or myargs.sortMT):
         counter=0
         for l in range(max_fibers): 
                              
-            if AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]*AFD_thresh:            
+            if AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]>=AFD_thresh:
             #if AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]>=AFD_f1*AFD_thresh:            
                 MT_array_zeroed[voxels[0][j],voxels[1][j],voxels[2][j],l]=MT_array[voxels[0][j],voxels[1][j],voxels[2][j],counter]
                 counter+=1
@@ -515,8 +542,8 @@ if not (myargs.visualize or myargs.sortMT):
         # temporarily make these as enormous as possible:
         #thresh_dirs_array = np.zeros([AFD_img.header.get_data_shape()[0] * AFD_img.header.get_data_shape()[1] *AFD_img.header.get_data_shape()[2], 3, 1])
         thresh_dirs_array = np.zeros([len(voxels[0])*max_fibers, 3, 1])
-        #mt_fixel_array = np.zeros([AFD_img.header.get_data_shape()[0] * AFD_img.header.get_data_shape()[1] *AFD_img.header.get_data_shape()[2], 1, 1])
-        mt_fixel_array = np.zeros([len(voxels[0])*max_fibers, 1, 1])
+        mt_fixel_array = np.zeros([AFD_img.header.get_data_shape()[0] * AFD_img.header.get_data_shape()[1] *AFD_img.header.get_data_shape()[2], 1, 1])
+        #mt_fixel_array = np.zeros([len(voxels[0])*max_fibers, 1, 1])
 
         counter = 0
         # for i in range(AFD_img.header.get_data_shape()[0]*AFD_img.header.get_data_shape()[1]*AFD_img.header.get_data_shape()[2])
