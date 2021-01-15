@@ -50,7 +50,7 @@ parser.add_argument('-load', dest='myresult_input_filename', help='input filenam
 
 myargs = parser.parse_args()
 
-iters=33
+iters=100
 
 if (myargs.myresult_input_filename):
     myresult = np.load(myargs.myresult_input_filename)
@@ -107,14 +107,14 @@ else:
         #              '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/sim-equation-iters-1pc/'])
 
 
-        mtr_output_iter = '/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/sim/1pc-mtrb0/mtr_00{}'.format(
+        mtr_output_iter = '/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/sim-linear/2pc/mtr_00{}'.format(
         str(i))
 
         subprocess.call(['/data/mril/mril5/ilana/bin/fibermyelin/scripts/fiberMTmyelin_pipeline.py',
                      # '-mtr', '/data_/tardiflab/ilana/mt-diff/mt_diff_64_20191025_104945/sim_equation/sim-equation-iters/mtr.nii',
                      '-mtr', mtr_output_iter,
                      '-Dpar',
-                     '/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/sim/1pc-mtrb0/Dpar.nii',
+                     '/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/sim-linear/2pc/Dpar.nii',
                      '-mask', '/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/sim/mask.nii.gz',
                      '-afd', '/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/sim/new-afd.nii',
                      '-afdthresh', '0.1',
@@ -130,7 +130,7 @@ else:
                      '-RD','0.000316716',
                      '-mtrB0','/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/sim/mtr-b0.nii',
                      '-fixel',
-                     '/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/sim/1pc-mtrb0/'])
+                     '/data_/tardiflab/ilana/mt-diff/qmt_diff_fat_20201201_104549/sim-linear/2pc'])
 #break into singles and crossings:
     #subprocess.call(['fslmaths', 'sim-equation-1000/mtr.nii', '-mul', 'roi_singles.nii', 'sim-equation-1000/mtr_singles.nii'])
     #subprocess.call(['fslmaths', 'sim-equation-1000/mtr.nii','-mul', 'roi_crossings.nii', 'sim-equation-1000/mtr_crossings.nii'])
