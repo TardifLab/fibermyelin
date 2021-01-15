@@ -25,9 +25,9 @@ plot_fit=False
 global just_b0
 just_b0=False #have to set here and in calling script fiberMTmyelin_pipeline.py
 global simulate #currently only for Dpar eq, not just b0,
-simulate=True
+simulate=False
 global sim_noise_level
-sim_noise_level=5 #S0 is hardcoded to 500 below, so 10 is 2%, 15 is 3%
+sim_noise_level=10 #S0 is hardcoded to 500 below, so 10 is 2%, 15 is 3%
 #sim_noise_level=0
 global sim_S0
 sim_S0=500
@@ -37,6 +37,8 @@ global dr_afd #this plots the residuals by iterating over different 'doctored' a
 dr_afd=False #plot_fit needs to be True as well
 global avg_tensor #use a fixed tensor for all fibers
 avg_tensor = True
+global linear_fit
+linear_fit = True
 
 #don't use this without editing the simulation code: it is hardcoded to MTR=0.3 right now
 #this will make fibers have MTR=0.3,0.4, ...
@@ -262,9 +264,31 @@ class FiberMTSolver:
 
             args[:,1]=self.MT_DWIs
                     
+        if (linear_fit):
+            ## linear fit
+            # S = S0*fi*e(-bD)*(1-MTRi)
+            # AX = B
+            # A = S0*fi*e(-bD) (constant if we fix the tensor)
+            # X = 1-MTRi
+            # B = S
+            ## S0 is the signal without diffusion and without MT, average from input
+            S0_ind = np.nonzero(np.logical_and(self.grad_table.bvals==0,self.MTws==0))
+            S0 = np.mean(self.MT_DWIs[S0_ind])
 
+            ## Dterm constant for each fiber
+            D = np.zeros([3, 3])
+            # D in coord system of fiber dir and orth vectors (f,v_orth1,v_orth2)
+            D = np.array([[self.AD, 0, 0], [0, self.RD, 0], [0, 0, self.RD]])
 
-        
+            A = np.zeros((self.number_of_contrasts * self.number_of_diff_encodes, self.number_of_fibers))
+            X = np.zeros((self.number_of_fibers,1))
+            B = self.MT_DWIs #the observations
+
+        norm_AFD = np.zeros(self.number_of_fibers)
+        sum_AFD = np.sum(self.AFDs)
+        for i in range(0, self.number_of_fibers):
+            norm_AFD[i] = self.AFDs[i] / sum_AFD
+
         #the nominal TR and TE:
         #args[:,2]=self.TR*np.ones(self.number_of_contrasts*self.number_of_diff_encodes)
         #args[:,15+6*(self.number_of_fibers-1)]=self.TE*np.ones(self.number_of_contrasts*self.number_of_diff_encodes)
@@ -280,19 +304,11 @@ class FiberMTSolver:
                             
             v_orth1=GetOrthVector(f)
             v_orth2=np.cross(f,v_orth1)
-            
-            
-                           
+
             #transformation into coord system of (f,v_orth1,v_orth2):
-                        
-         
             xfm_forward=np.transpose([f,v_orth1,v_orth2])
-            
-           
             xfm_matrix=linalg.inv(xfm_forward)          
-            
-                        
-            
+
             if (fix_D_phantom3):
                 #get Dperp and Dpar from tensor fit in single fiber voxels with appropriate orientation and AFD>0.6
                 #for phantom3:            
@@ -317,13 +333,10 @@ class FiberMTSolver:
                     else: #cuprizone cord
                         args[:,11+6*k]=0.543E-3*np.ones(self.number_of_contrasts*self.number_of_diff_encodes)
                         args[:,12+6*k]=0.252E-3*np.ones(self.number_of_contrasts*self.number_of_diff_encodes)    
-                
-            
+
             #make gnew for each observation
             for j in range(0,self.number_of_diff_encodes):  
-                                
-                
-                #bvecs are in **either voxel space or PRS**: same for phantom3 case  
+                #bvecs are in **either voxel space or PRS**: same for phantom3 case
                 #we convert the axes here for non-transverse
                 #this doesn't handle any angulation!!!
                 #fiber directions are in world space, ==voxel space once we exchange the axes and account for strides if no angulation
@@ -356,28 +369,27 @@ class FiberMTSolver:
                 
                 #check some things:
                 #print("fiber %f %f %f v_orth1 %f %f %f v_orth2 %f %f %f\ng %f %f %f gnew %f %f %f det %f" % (f[0], f[1], f[2], v_orth1[0], v_orth1[1], v_orth1[2], v_orth2[0], v_orth2[1], v_orth2[2], g[0], g[1], g[2], gnew[0], gnew[1], gnew[2], linalg.det(np.array([f,v_orth1, v_orth2]))))
-                
-                
+
                 #g is normalized
                 #gnew=gnew/linalg.norm(gnew)
-            
-                #string out:
-                for i in range(0,self.number_of_contrasts):
-                    if (args[i*self.number_of_diff_encodes+j,0]>9E-9):                        
-                        args[i*self.number_of_diff_encodes+j,8+6*k]=gnew[0]
-                        args[i*self.number_of_diff_encodes+j,9+6*k]=gnew[1]
-                        args[i*self.number_of_diff_encodes+j,10+6*k]=gnew[2]
-                        
-                    else: #set explicitly to zero again for b=0
-                        args[i*self.number_of_diff_encodes+j,8+6*k]=0.0
-                        args[i*self.number_of_diff_encodes+j,9+6*k]=0.0
-                        args[i*self.number_of_diff_encodes+j,10+6*k]=0.0
-            
-                
-                
-        
-        #to weight b=0 more (instead of actually acquiring more), repeat N more times:        
 
+                # DO as numpy matrix dot product  (note not matrix mult)
+                Dterm = 0.0
+                for i in range(0, 3):
+                    for h in range(0, 3):
+                        Dterm += D[i, h] * gnew[i] * gnew[h]
+
+                print("Dterm %f" % Dterm)
+
+                if (linear_fit):
+                    # create A, the coefficients A = S0*fi*e(-bD)
+                    if (simulate):
+                        S0 = sim_S0
+
+                    A[j,k] = S0*self.AFDs[k]*np.exp(-self.grad_table.bvals[j] * Dterm)
+
+
+        #to weight b=0 more (instead of actually acquiring more), repeat N more times:
         #don't add b=0s, there are already some in the acquisition
         newargs = args
               
@@ -389,9 +401,11 @@ class FiberMTSolver:
             new_params=np.copy(self.init_params)
             new_params[self.number_of_fibers+1]=0.0 #neta
 
-
-
             sim_data=MTDiffEqn_signal(new_params,newargs)
+
+            if (linear_fit):
+                #S = S0*fi*e(-bD)*(1-MTRi)
+                sim_data = np.matmul(A,(1-new_params[0:self.number_of_fibers])) #this does the matrix multiplications
 
             #this will just be the magnitude difference:
             #sim_data=newargs[:,1]+IRDiffEqn(new_params,newargs) # this is the equation (sim) result
@@ -403,7 +417,8 @@ class FiberMTSolver:
             newargs[:,1]=np.sqrt(np.square(sim_data+[random.gauss(0,sim_noise_level) for i in range(len(sim_data))])+np.square([random.gauss(0,sim_noise_level) for i in range(len(sim_data))]))
 
             #write out the simulated data to a file
-
+            if (linear_fit):
+                B = newargs[:,1]
 
         #fit the equation: there are a lot of options here; user can modify this call
 
@@ -412,8 +427,10 @@ class FiberMTSolver:
             
         #trust region reflective:        
         #res_lsq = least_squares(IRDiffEqn, self.init_params, method='trf', bounds=tuple([self.lowerbounds,self.upperbounds]),args=args)
-        
-        
+        if (linear_fit):
+            X= np.linalg.lstsq(A[A.shape[0]/2:,:],B[B.shape[0]/2:]) #only use the MT weighted data so only the 2nd half
+            return (1-X[0])
+
         #trf, more b0s, 3-point jacobian computation:
         res_lsq = least_squares(MTDiffEqn, self.init_params, method='trf', bounds=tuple([self.lowerbounds,self.upperbounds]),args=newargs, jac='3-point')
 
@@ -848,8 +865,6 @@ def MTDiffEqn(params,*args): #equation for residuals; params is vector of the un
                 #print("Dterm %f" % Dterm)                  
                           
                 term3=np.exp(-bvals[h]*Dterm)
-
-
 
                 #print("term1 %f term2 %f term3 %f" % (term1, term2, term3))
                 

@@ -51,6 +51,9 @@ bedpostx=False
 global just_b0
 just_b0=False #have to set in other file too
 
+global linear_fit
+linear_fit=True
+
 #for visualization W/L:
 #asparagus 500-800,1500
 #human brain 550-575-600,725-750-800
@@ -418,9 +421,12 @@ if not (myargs.visualize or myargs.sortMT):
             #MTsandDparfit=np.zeros([number_of_fibers,2])
             fit = mtsolver.GetMTs()
             if (fit is not None):
-                MTsandDparfit=fit.x
-                cost_array[voxels[0][j], voxels[1][j], voxels[2][j]] = fit.cost
-                neta_array[voxels[0][j], voxels[1][j], voxels[2][j]] = MTsandDparfit[number_of_fibers + 1]
+                if linear_fit:
+                    MTsandDparfit=fit;
+                else:
+                    MTsandDparfit=fit.x
+                    cost_array[voxels[0][j], voxels[1][j], voxels[2][j]] = fit.cost
+                    neta_array[voxels[0][j], voxels[1][j], voxels[2][j]] = MTsandDparfit[number_of_fibers + 1]
 
             else:
                 MTsandDparfit =None
@@ -435,7 +441,11 @@ if not (myargs.visualize or myargs.sortMT):
             
         for i in range(0,number_of_fibers):
             if (MTsandDparfit is not None):
-                if (set_Dpar_equal):
+                if linear_fit:
+                    MTs[i] = MTsandDparfit[i]
+                    print('MT: %f' % MTs[i])
+                    Dparfit[i] =avg_Dpar
+                elif (set_Dpar_equal):
                     MTs[i]=MTsandDparfit[i]
                     Dparfit[i]=MTsandDparfit[number_of_fibers]
                     print('MT: %f' % MTs[i])
