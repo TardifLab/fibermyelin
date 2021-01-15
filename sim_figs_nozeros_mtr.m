@@ -49,17 +49,27 @@ end
 
 bias_mtr_1 = (mtr_avg.img(:,:,1)-MTR(:,:,:,1))./MTR(:,:,:,1)*100;
 bias_mtr_2 = (mtr_avg.img(:,:,2)-MTR(:,:,:,2))./MTR(:,:,:,2)*100;
+
+% fiber 1
 figure
-imagesc(flip(fliplr(permute(bias_mtr_1,[2 1 ]))),[-20 20])
-xticks(1:11)
-xticklabels({'1-0','0.9-0.1','0.8-0.2','0.7-0.3','0.6-0.4','0.5-0.5','0.4-0.6','0.7-0.3','0.8-0.2','0.9-0.1','1-0'}) 
-xtickangle(45)
-yticks([1:25])
-yticklabels({'0.4','0.35','0.3','0.25','0.2','0.4','0.35','0.3','0.25','0.2','0.4','0.35','0.3','0.25','0.2','0.4','0.35','0.3','0.25','0.2','0.4','0.35','0.3','0.25','0.2'}) 
-colormap(bluewhitered), colorbar
-title (strcat('% mtr (bias) for Fiber 1; SNR = ',num2str(SNR)))
+dat = flip(fliplr(permute(bias_mtr_1,[2 1 ])));
+count=5;
+for p = 1:5:25
+    subplot(5,1,6-count)
+    imagesc(dat(p:p+4,:),[-20 20])
+    xticks(1:11)
+    xticklabels({'1-0','0.9-0.1','0.8-0.2','0.7-0.3','0.6-0.4','0.5-0.5','0.4-0.6','0.7-0.3','0.8-0.2','0.9-0.1','1-0'})
+    xtickangle(45)
+    yticks(1:5)
+    ylabel('MTR2')
+    yticklabels({'0.4','0.35','0.3','0.25','0.2'})
+    title(strcat('MTR1 = ',num2str(mtr1(count))))
+    count=count-1;
+    colormap(bluewhitered), colorbar
+end
+suptitle (strcat('% mtr (bias) for Fiber 1; SNR = ',num2str(SNR)))
 xlabel('AFD1 - AFD2')
-ylabel('MTR1 { MTR2')
+
 print(strcat(outdir,'/mtr-fiber1'),'-dpng','-r0')
 biasmtr(:,:,1) = bias_mtr_1;
 biasmtr(:,:,2) = bias_mtr_2;
@@ -70,51 +80,70 @@ save_nii(nii, strcat(outdir,'/mtr-biasFiber.nii'))
 
 %fiber 2
 figure
-imagesc(flip(fliplr(permute(bias_mtr_2,[2 1 ]))),[-20 20])
-%xticks([1:5])
-%xticklabels({'fatest','~fat','average','~skinny','skiniest'})
-%yticks([1:5])
-%yticklabels({'fatest','~fat','average','~skinny','skiniest'})
-xticks(1:11)
-xticklabels({'1-0','0.9-0.1','0.8-0.2','0.7-0.3','0.6-0.4','0.5-0.5','0.4-0.6','0.7-0.3','0.8-0.2','0.9-0.1','1-0'}) 
-xtickangle(45)
-yticks([1:25])
-yticklabels({'0.4','0.35','0.3','0.25','0.2','0.4','0.35','0.3','0.25','0.2','0.4','0.35','0.3','0.25','0.2','0.4','0.35','0.3','0.25','0.2','0.4','0.35','0.3','0.25','0.2'}) 
-colormap(bluewhitered), colorbar
-title (strcat('% mtr (bias) for Fiber 2 SNR = ',num2str(SNR)))
+dat = flip(fliplr(permute(bias_mtr_2,[2 1 ])));
+count=5;
+for p = 1:5:25
+    subplot(5,1,6-count)
+    imagesc(dat(p:p+4,:),[-20 20])
+    xticks(1:11)
+    xticklabels({'1-0','0.9-0.1','0.8-0.2','0.7-0.3','0.6-0.4','0.5-0.5','0.4-0.6','0.7-0.3','0.8-0.2','0.9-0.1','1-0'})
+    xtickangle(45)
+    yticks(1:5)
+    ylabel('MTR2')
+    yticklabels({'0.4','0.35','0.3','0.25','0.2'})
+    title(strcat('MTR1 = ',num2str(mtr1(count))))
+    count=count-1;
+    colormap(bluewhitered), colorbar
+end
+suptitle (strcat('% mtr (bias) for Fiber 2; SNR = ',num2str(SNR)))
 xlabel('AFD1 - AFD2')
-ylabel('MTR1 { MTR2')
+
 print(strcat(outdir,'/mtr-fiber2'),'-dpng','-r0')
 
 %% standard deviation
 pcstd_mtr_1 = mtr_sd.img(:,:,1)./MTR(:,:,:,1)*100; %in percent
 pcstd_mtr_2 = mtr_sd.img(:,:,2)./MTR(:,:,:,2)*100;
 figure
-imagesc(flip(fliplr(permute(pcstd_mtr_1,[2 1 ]))),[0 30])
-xticks(1:11)
-xticklabels({'1-0','0.9-0.1','0.8-0.2','0.7-0.3','0.6-0.4','0.5-0.5','0.4-0.6','0.7-0.3','0.8-0.2','0.9-0.1','1-0'}) 
-xtickangle(45)
-yticks([1:25])
-yticklabels({'0.4','0.35','0.3','0.25','0.2','0.4','0.35','0.3','0.25','0.2','0.4','0.35','0.3','0.25','0.2','0.4','0.35','0.3','0.25','0.2','0.4','0.35','0.3','0.25','0.2'}) 
-colormap(bluewhitered), colorbar
-title (strcat('% mtr STD for Fiber 1, SNR = ',num2str(SNR)))
+dat=flip(fliplr(permute(pcstd_mtr_1,[2 1 ])));
+count=5;
+for p = 1:5:25
+    subplot(5,1,6-count)
+    imagesc(dat(p:p+4,:),[0 30])
+    xticks(1:11)
+    xticklabels({'1-0','0.9-0.1','0.8-0.2','0.7-0.3','0.6-0.4','0.5-0.5','0.4-0.6','0.7-0.3','0.8-0.2','0.9-0.1','1-0'})
+    xtickangle(45)
+    yticks(1:5)
+    ylabel('MTR2')
+    yticklabels({'0.4','0.35','0.3','0.25','0.2'})
+    title(strcat('MTR1 = ',num2str(mtr1(count))))
+    count=count-1;
+    colormap(bluewhitered), colorbar
+end
+suptitle (strcat('% mtr STD for Fiber 1, SNR = ',num2str(SNR)))
 xlabel('AFD1 - AFD2')
-ylabel('MTR1 { MTR2')
 print(strcat(outdir,'/mtrstd-fiber1'),'-dpng','-r0')
 
 %fiber 2
 figure
-imagesc(flip(fliplr(permute(pcstd_mtr_2,[2 1 ]))),[0 30])
-xticks(1:11)
-xticklabels({'1-0','0.9-0.1','0.8-0.2','0.7-0.3','0.6-0.4','0.5-0.5','0.4-0.6','0.7-0.3','0.8-0.2','0.9-0.1','1-0'}) 
-xtickangle(45)
-yticks([1:25])
-yticklabels({'0.4','0.35','0.3','0.25','0.2','0.4','0.35','0.3','0.25','0.2','0.4','0.35','0.3','0.25','0.2','0.4','0.35','0.3','0.25','0.2','0.4','0.35','0.3','0.25','0.2'}) 
-colormap(bluewhitered), colorbar
-title (strcat('% mtr STD for Fiber 2, SNR = ',num2str(SNR)))
+dat=flip(fliplr(permute(pcstd_mtr_2,[2 1 ])));
+count=5;
+for p = 1:5:25
+    subplot(5,1,6-count)
+    imagesc(dat(p:p+4,:),[0 30])
+    xticks(1:11)
+    xticklabels({'1-0','0.9-0.1','0.8-0.2','0.7-0.3','0.6-0.4','0.5-0.5','0.4-0.6','0.7-0.3','0.8-0.2','0.9-0.1','1-0'})
+    xtickangle(45)
+    yticks(1:5)
+    ylabel('MTR2')
+    yticklabels({'0.4','0.35','0.3','0.25','0.2'})
+    title(strcat('MTR1 = ',num2str(mtr1(count))))
+    count=count-1;
+    colormap(bluewhitered), colorbar
+end
+
+suptitle (strcat('% mtr STD for Fiber 2, SNR = ',num2str(SNR)))
 xlabel('AFD1 - AFD2')
-ylabel('MTR1 { MTR2')
-%text(0.5,1,strcat('fit fails= ',num2str(fail*100),'%'))
+
 print(strcat(outdir,'/mtrstd-fiber2'),'-dpng','-r0')
 pcstdmtr(:,:,1) = pcstd_mtr_1;
 pcstdmtr(:,:,2) = pcstd_mtr_2;
