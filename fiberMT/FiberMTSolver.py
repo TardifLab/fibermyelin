@@ -24,10 +24,52 @@ global plot_fit
 plot_fit=False
 global just_b0
 just_b0=False #have to set here and in calling script fiberMTmyelin_pipeline.py
+
+# Simulations
+# they have been set up 2 different ways, either varying MTR and AFDs or varying tensor shape
+# --1:varying MTR and AFDs
+#       - need input MTR file (all different combos)
+#       - need input AFD file (all different combos)
+#       - read in the tensor shape from AD and RD
+# --2: varying tensor shape
+#       - need ADin (all different combos)
+#       - need RDin (all different combos)
+#       - fixed diff in MTR set here in code
+#       - AFD fixed in input file (same for all combos)
+#       - the actual assumed tensor has to be hard-coded
+global sim1
+global sim2
+
+sim1 = False
+sim2 = not sim1
+
 global simulate #currently only for Dpar eq, not just b0,
-simulate=False
+#don't use this without editing the simulation code: it is hardcoded to MTR=0.3 right now
+#this will make fibers have MTR=0.3,0.4, ...
+global sim_different_MTs
+#simulation: will read in values instead of assuming they are all MTR=0.3 (need an additional input)
+global sim_input_MTs
+# note that we still need to specify AD and RD, they will be assumed in the fitting
+global sim_input_tensor
+
+if sim1:
+    simulate = True
+    sim_different_MTs = False
+    sim_input_MTs = True
+    sim_input_tensor = False
+
+if sim2:
+    simulate = True
+    sim_different_MTs = True
+    sim_input_MTs = False
+    sim_input_tensor = True
+    global AD_h
+    AD_h = 14.9e-4
+    global RD_h
+    AD_h = 3.8e-4
+
 global sim_noise_level
-sim_noise_level=10 #S0 is hardcoded to 500 below, so 10 is 2%, 15 is 3%
+sim_noise_level=0 #S0 is hardcoded to 500 below, so 10 is 2%, 15 is 3%
 #sim_noise_level=0
 global sim_S0
 sim_S0=500
@@ -37,17 +79,9 @@ global dr_afd #this plots the residuals by iterating over different 'doctored' a
 dr_afd=False #plot_fit needs to be True as well
 global avg_tensor #use a fixed tensor for all fibers
 avg_tensor = True
-global linear_fit
+global linear_fit #remember to change in fiberMTmyelin_pipeline too
 linear_fit = True
 
-#don't use this without editing the simulation code: it is hardcoded to MTR=0.3 right now
-#this will make fibers have MTR=0.3,0.4, ...
-global sim_different_MTs
-sim_different_MTs=False
-
-#simulation: will read in values instead of assuming they are all MTR=0.3 (need an additional input)
-global sim_input_MTs
-sim_input_MTs=True
 
 
 #if True, see hardcoded vic value in IRDiffEq function.
@@ -103,18 +137,19 @@ class FiberMTSolver:
         self.upperbounds = np.zeros(self.number_of_fibers + 3)
 
         for i in range(0,self.number_of_fibers):
-            self.init_params[i]=self.mtrB0  # MTR (optionally input on command line, otherwise 0.3) 
+            self.init_params[i]=self.mtrDW  # MTR (optionally input on command line, otherwise 0.3)
             self.lowerbounds[i]=0#0
             self.upperbounds[i]=0.8#np.inf#100%
 
         #this sets the fiber MTs to different values if desired
-        if (simulate and sim_different_MTs):
+        if (sim2):
             if (self.number_of_fibers>1):
                 for i in range(0,self.number_of_fibers):
                     self.init_params[i]=0.3+i*0.1 #MTR
+            #print "Nominal MTRs %f and %f" % (self.init_params[0], self.init_params[1])
 
         #this sets the MTRs based on an input file (for simulation)
-        if (simulate and sim_input_MTs):
+        if (sim1):
             for i in range(0, self.number_of_fibers):
                 self.init_params[i] = self.MTin[i]  # MTR from input file
 
@@ -275,10 +310,19 @@ class FiberMTSolver:
             S0_ind = np.nonzero(np.logical_and(self.grad_table.bvals==0,self.MTws==0))
             S0 = np.mean(self.MT_DWIs[S0_ind])
 
-            ## Dterm constant for each fiber
+            ## Dterm constant for each fiber (for real data and sim1)
+            if (sim2): #hard-coded tensor, specify the actual tensor on the command line with AD_in and RD_in
+                Din = np.zeros([3, 3, 2]) #2 different tensors
+                Din[:, :, 0] = np.array([[self.ADin[0], 0, 0], [0, self.RDin[0], 0], [0, 0, self.RDin[0]]])
+                Din[:, :, 1] = np.array([[self.ADin[1], 0, 0], [0, self.RDin[1], 0], [0, 0, self.RDin[1]]])
+                Ain = np.zeros((self.number_of_contrasts * self.number_of_diff_encodes, self.number_of_fibers))
+
+            #same average tensor for both, specified by AD and RD on input
             D = np.zeros([3, 3])
             # D in coord system of fiber dir and orth vectors (f,v_orth1,v_orth2)
             D = np.array([[self.AD, 0, 0], [0, self.RD, 0], [0, 0, self.RD]])
+
+            Dterm_array = np.zeros((self.number_of_contrasts * self.number_of_diff_encodes, self.number_of_fibers))
 
             A = np.zeros((self.number_of_contrasts * self.number_of_diff_encodes, self.number_of_fibers))
             X = np.zeros((self.number_of_fibers,1))
@@ -373,20 +417,40 @@ class FiberMTSolver:
                 #g is normalized
                 #gnew=gnew/linalg.norm(gnew)
 
-                # DO as numpy matrix dot product  (note not matrix mult)
-                Dterm = 0.0
-                for i in range(0, 3):
-                    for h in range(0, 3):
-                        Dterm += D[i, h] * gnew[i] * gnew[h]
+                # string out:
+                for i in range(0, self.number_of_contrasts):
+                    if (args[i * self.number_of_diff_encodes + j, 0] > 9E-9):
+                        args[i * self.number_of_diff_encodes + j, 8 + 6 * k] = gnew[0]
+                        args[i * self.number_of_diff_encodes + j, 9 + 6 * k] = gnew[1]
+                        args[i * self.number_of_diff_encodes + j, 10 + 6 * k] = gnew[2]
 
-                print("Dterm %f" % Dterm)
+                    else:  # set explicitly to zero again for b=0
+                        args[i * self.number_of_diff_encodes + j, 8 + 6 * k] = 0.0
+                        args[i * self.number_of_diff_encodes + j, 9 + 6 * k] = 0.0
+                        args[i * self.number_of_diff_encodes + j, 10 + 6 * k] = 0.0
+
 
                 if (linear_fit):
+                    # DO as numpy matrix dot product  (note not matrix mult)
+                    Dterm = 0.0
+                    DtermIn = np.zeros(2) # create Dterm for each fiber in sim2 (stick with 2 fibers)
+                    for i in range(0, 3):
+                        for h in range(0, 3):
+                            Dterm += D[i, h] * gnew[i] * gnew[h]
+                            if (sim2):
+                                DtermIn[k] += Din[i, h, k] * gnew[i] * gnew[h]
+
+
+                    #print("Dterm %f %i %i" % (Dterm,k,j))
+                    Dterm_array[j,k]=Dterm
+
                     # create A, the coefficients A = S0*fi*e(-bD)
                     if (simulate):
                         S0 = sim_S0
 
-                    A[j,k] = S0*self.AFDs[k]*np.exp(-self.grad_table.bvals[j] * Dterm)
+                    A[j,k] = S0*norm_AFD[k]*np.exp(-self.grad_table.bvals[j] * Dterm)
+                    if sim2:
+                        Ain[j, k] = S0 * norm_AFD[k] * np.exp(-self.grad_table.bvals[j] * DtermIn[k])
 
 
         #to weight b=0 more (instead of actually acquiring more), repeat N more times:
@@ -405,7 +469,12 @@ class FiberMTSolver:
 
             if (linear_fit):
                 #S = S0*fi*e(-bD)*(1-MTRi)
-                sim_data = np.matmul(A,(1-new_params[0:self.number_of_fibers])) #this does the matrix multiplications
+                # the 1st half has mtw=0 and the 2nd half mtw=1
+                for m in range(0, self.MTws.shape[0]):
+                    if sim2: #if we've created A with 2 different tensors
+                        sim_data[m] = np.matmul(Ain[m,], (1 - self.MTws[m] * new_params[0:self.number_of_fibers]))
+                    else:
+                        sim_data[m] = np.matmul(A[m,], (1-self.MTws[m]*new_params[0:self.number_of_fibers]) ) #this does the matrix multiplications
 
             #this will just be the magnitude difference:
             #sim_data=newargs[:,1]+IRDiffEqn(new_params,newargs) # this is the equation (sim) result
@@ -416,9 +485,39 @@ class FiberMTSolver:
             #add noise on two channels: we do want to do this
             newargs[:,1]=np.sqrt(np.square(sim_data+[random.gauss(0,sim_noise_level) for i in range(len(sim_data))])+np.square([random.gauss(0,sim_noise_level) for i in range(len(sim_data))]))
 
+            # little test to see if I can make the data so noisy that the MTR is very variable
+            if (0):
+                fig = plt.figure(1, figsize=(9, 6))
+                ax = fig.add_subplot(111)
+                noise_level_test=[0,10,20,30]
+                color = ['k-','r--','g--','b--']
+                for s in range(0,len(noise_level_test)):
+                    B=np.sqrt(np.square(sim_data+[random.gauss(0,noise_level_test[s]) for i in range(len(sim_data))])+np.square([random.gauss(0,noise_level_test[s]) for i in range(len(sim_data))]))
+                    S_noMT = B[np.logical_and(self.grad_table.bvals != 0, self.MTws == 0)]
+                    S_MT = B[np.logical_and(self.grad_table.bvals != 0, self.MTws == 1)]
+                    mtr_dir = (S_noMT-S_MT)/S_noMT #MTR at every dir
+                    A_MT = A[np.logical_and(self.grad_table.bvals != 0, self.MTws == 1)]  # only MT and no b=0s
+                    B_MT = B[np.logical_and(self.grad_table.bvals != 0, self.MTws == 1)]  # only MT and no b=0s
+                    A_MT = np.vstack([A_MT, np.tile(norm_AFD, (5, 1))])  # add 5times to increase the weight
+                    B_MT = np.append(B_MT, (1 - np.mean(mtr_dir)) * np.ones(5))
+                    X = np.linalg.lstsq(A_MT, B_MT)
+                    ax.plot(mtr_dir, color[s], linewidth=2, label="noise level " + str(noise_level_test[s]) + " fit mtr "+str(1-X[0]))
+                    ax.legend()
+                #ax.legend()
+                plt.ylim(-1, 1)
+                plt.show()
+            ##finish little test
+
             #write out the simulated data to a file
             if (linear_fit):
                 B = newargs[:,1]
+                # check whether the average diffusion-w MTR makes sense
+                S_noMT = np.mean(B[np.logical_and(self.grad_table.bvals!=0, self.MTws==0)])#average signal over all directions; no MT; no b=0
+                S_MT = np.mean(B[np.logical_and(self.grad_table.bvals != 0, self.MTws == 1)]) #average signal over all directions; with MT; no b=0
+                self.mtrDW = (S_noMT-S_MT)/S_noMT
+                #now is this same or similar to (1-MTR)=fi(1-MTRi) or MTR = 1-(fi(1-MTRi))
+                mtrDW_sim = 1-(np.matmul(self.AFDs, (1 - new_params[0:self.number_of_fibers])))
+                print "mtrDW = %f and mtrDW_sim = %f" % (self.mtrDW,mtrDW_sim)
 
         #fit the equation: there are a lot of options here; user can modify this call
 
@@ -428,37 +527,45 @@ class FiberMTSolver:
         #trust region reflective:        
         #res_lsq = least_squares(IRDiffEqn, self.init_params, method='trf', bounds=tuple([self.lowerbounds,self.upperbounds]),args=args)
         if (linear_fit):
-            X= np.linalg.lstsq(A[A.shape[0]/2:,:],B[B.shape[0]/2:]) #only use the MT weighted data so only the 2nd half
-            return (1-X[0])
+            A_MT = A[np.logical_and(self.grad_table.bvals!=0, self.MTws==1)] #only MT and no b=0s
+            B_MT = B[np.logical_and(self.grad_table.bvals!=0, self.MTws==1)] #only MT and no b=0s
+            #now add the extra constraint of the spherically averaged MTR [1-MTR = fi(1-MTRi)]
+            A_MT = np.vstack([A_MT,np.tile(norm_AFD,(5,1))]) # add 5times to increase the weight
+            B_MT = np.append(B_MT, (1-self.mtrDW)*np.ones(5))
+            X= np.linalg.lstsq(A_MT,B_MT) #only use the MT weighted data so only the 2nd half
+            result = (1-X[0]) #1-MTR
+            if (any(result<0)): #if MTR<0, set to MTR of DW
+                result = result.fill(self.mtrDW)
 
-        #trf, more b0s, 3-point jacobian computation:
-        res_lsq = least_squares(MTDiffEqn, self.init_params, method='trf', bounds=tuple([self.lowerbounds,self.upperbounds]),args=newargs, jac='3-point')
+        else:
+            #trf, more b0s, 3-point jacobian computation:
+            res_lsq = least_squares(MTDiffEqn, self.init_params, method='trf', bounds=tuple([self.lowerbounds,self.upperbounds]),args=newargs, jac='3-point')
 
-        #res_lsq = least_squares(MTDiffEqn, self.init_params, method='trf',bounds=tuple([self.lowerbounds, self.upperbounds]), args=newargs, jac='3-point', verbose=2)
+            #res_lsq = least_squares(MTDiffEqn, self.init_params, method='trf',bounds=tuple([self.lowerbounds, self.upperbounds]), args=newargs, jac='3-point', verbose=2)
 
-    #lm:
+        #lm:
 
-        #res_lsq = least_squares(MTDiffEqn, self.init_params, method='lm',args=newargs)
+            #res_lsq = least_squares(MTDiffEqn, self.init_params, method='lm',args=newargs)
         
-        #lm, more b0s:
-        #res_lsq = least_squares(IRDiffEqn, self.init_params, method='lm',  args=newargs)
+            #lm, more b0s:
+            #res_lsq = least_squares(IRDiffEqn, self.init_params, method='lm',  args=newargs)
     
      
         
-        print "fit status %i" %  res_lsq.status       
-        if (not res_lsq.success or res_lsq.status==0 ):      #status=0 means it reached max iterations
+            print "fit status %i" %  res_lsq.status
+            if (not res_lsq.success or res_lsq.status==0 ):      #status=0 means it reached max iterations
 
 
-            return None
+                return None
         
-        #print all fitted parameters:
-        print(res_lsq.x)
+            #print all fitted parameters:
+            print(res_lsq.x)
                 
         
-        #print("%d SSE %f" % (self.TIs[0], res_lsq.cost))
-        #print args[:,4] #TIs
-        #print("vic %f" % self.vic)
-        #print("viso %f" % self.viso)
+            #print("%d SSE %f" % (self.TIs[0], res_lsq.cost))
+            #print args[:,4] #TIs
+            #print("vic %f" % self.vic)
+            #print("viso %f" % self.viso)
         
         if (plot_fit):#look at the data:             
             # Create a figure instance
@@ -475,7 +582,7 @@ class FiberMTSolver:
             if (True):
                 
                 
-                plotdata=np.zeros([self.number_of_contrasts+1,4]) #IRL +1 because I strung the contrats after each other
+                plotdata=np.zeros([self.number_of_contrasts+1,4]) #IRL +1 because I strung the contrast after each other
                 if (self.number_of_diff_encodes >= 65): #there might additional b=0s
                     thisDWI = [0, 59, 37, 35]#these are the index for b=0, and closest to be along z,y,z
                 elif (self.number_of_diff_encodes >= 31):
@@ -499,8 +606,10 @@ class FiberMTSolver:
                 plt.ylabel('Signal Intensity',fontsize=14)
                 
                 #now set to predicted signal:
-                
-                pred_sig_res=MTDiffEqn(res_lsq.x,newargs)
+                if linear_fit:
+                    pred_sig_res = np.matmul(A,result)
+                else:
+                    pred_sig_res=MTDiffEqn(res_lsq.x,newargs)
                 
                 
                 
@@ -521,7 +630,10 @@ class FiberMTSolver:
                 # write fitted MT to plot
                 textstr =''
                 for t in range(self.number_of_fibers):
-                    textstr = textstr+(r'$MT_%d=%.2f (f_%d=%.1f)$' % (t+1,res_lsq.x[t],t+1,self.AFDs[t]))
+                    if linear_fit:
+                        textstr = textstr + (r'$MT_%d=%.2f (f_%d=%.1f)$' % (t + 1, result[t], t + 1, self.AFDs[t]))
+                    else:
+                        textstr = textstr+(r'$MT_%d=%.2f (f_%d=%.1f)$' % (t+1,res_lsq.x[t],t+1,self.AFDs[t]))
                     if (t!=self.number_of_fibers-1):
                         textstr =textstr + ('\n')
                 props = dict(boxstyle='round', facecolor='grey', alpha=0.5)
@@ -664,20 +776,23 @@ class FiberMTSolver:
 #             else:
 #                 self.T1s[i]=res_lsq.x[0]
 #==============================================================================
-        # compute the MSE
-        pred_sig_res=MTDiffEqn(res_lsq.x,newargs) #predicted signal residual
-        summation = 0
-        for p in range(len(pred_sig_res)):
-            squared_difference = pred_sig_res[p] ** 2
-            summation = summation + squared_difference
-        MSE = summation / len(pred_sig_res)
-        print("MSE %f" % MSE)
+        if linear_fit:
+            return result
+        else:
+            # compute the MSE
+            pred_sig_res=MTDiffEqn(res_lsq.x,newargs) #predicted signal residual
+            summation = 0
+            for p in range(len(pred_sig_res)):
+                squared_difference = pred_sig_res[p] ** 2
+                summation = summation + squared_difference
+            MSE = summation / len(pred_sig_res)
+            print("MSE %f" % MSE)
        
-        #return the entire fit:
-        return res_lsq
+            #return the entire fit:
+            return res_lsq
         
     #DO: potentially just give inputs upon initialization, or will we reuse? give inputs to GetT1s?    
-    def SetInputData(self,fiber_dirs,AFDs,MT_DWIs,MTws,grad_table,AD,RD,mtrB0,vic,vox0,vox1,vox2,sag,Dpareq,viso,B1,MTin):
+    def SetInputData(self,fiber_dirs,AFDs,MT_DWIs,MTws,grad_table,AD,RD,mtrDW,vic,vox0,vox1,vox2,sag,Dpareq,viso,B1,MTin,ADin, RDin):
 
         
         
@@ -699,7 +814,13 @@ class FiberMTSolver:
         self.AD = AD
         self.RD = RD
 
-        self.mtrB0 = mtrB0
+        if sim2:
+            self.ADin = ADin
+            self.RDin = RDin
+            print "sim AD %f %f" %(ADin[0], ADin[1])
+            print "sim RD %f %f" %(RDin[0], RDin[1])
+
+        self.mtrDW = mtrDW
         
         self.number_of_diff_encodes = len(self.grad_table.bvals)/self.number_of_contrasts
         
@@ -862,7 +983,7 @@ def MTDiffEqn(params,*args): #equation for residuals; params is vector of the un
                     for k in range (0,3):
                         Dterm+=D[j,k]*gnew[j]*gnew[k]
                         
-                #print("Dterm %f" % Dterm)                  
+                print("Dterm %f" % Dterm)
                           
                 term3=np.exp(-bvals[h]*Dterm)
 
@@ -1281,7 +1402,7 @@ def iszero(x):
         
 def GetOrthVector(v):
     if iszero(v[0]) and iszero(v[1]):
-        if  iszero(v[3]):
+        if  iszero(v[2]):# IRL I don't why v[3] and not v[2]?
             raise ValueError('zero vector')
         else:
             return [0,1,0]    
