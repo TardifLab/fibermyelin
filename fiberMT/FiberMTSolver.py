@@ -40,8 +40,9 @@ just_b0=False #have to set here and in calling script fiberMTmyelin_pipeline.py
 global sim1
 global sim2
 
+#only 1 can be true
 sim1 = False
-sim2 = not sim1
+sim2 = False
 
 global simulate #currently only for Dpar eq, not just b0,
 #don't use this without editing the simulation code: it is hardcoded to MTR=0.3 right now
