@@ -121,6 +121,7 @@ parser.add_argument('-vis', dest='visualize', help='visualize previously compute
 parser.add_argument('-sort', dest='sortMT', help='print out previously computed fiber MTs in 2-fiber voxels, sorted by orientation', required=False, action='store_true')
 #parser.add_argument('-sim_eq', dest='sim_eq', help='simulate the MT-diff equation using the synthetic MT values (input in )', required=False, action='store_true')
 parser.add_argument('-mtr_in', dest='mtr_in_image_filename', help='Optional MTR synthetic filename: pre-computed MTR filename if simulate option is on', required=False, nargs=1)
+parser.add_argument('-writeMT', dest='writeMT', help='Given an mtr_in (4D) and a directions file, write the MT to each fixel (above AFD thresh) (hacky, but need all the inputs as well)', required=False, action='store_true')
 
 myargs = parser.parse_args()
 
@@ -295,7 +296,7 @@ else:
         number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]=number_of_fibers
 
 
-if not (myargs.visualize or myargs.sortMT):    
+if not (myargs.visualize or myargs.sortMT):
     #number of DWIs (assume one b=0, at beginning). assume x,y,z,diff
     number_of_DWIs=MT_diff_img.get_data().shape[3]
   
@@ -394,6 +395,9 @@ if not (myargs.visualize or myargs.sortMT):
         if myargs.AD_image_filename:  # only with sim2: use input tensor shape, assume both are provided
             ADin = AD_img.get_data()[voxels[0][j], voxels[1][j], voxels[2][j], :]
             RDin = RD_img.get_data()[voxels[0][j], voxels[1][j], voxels[2][j], :]
+        else:
+            ADin = avg_Dpar
+            RDin = avg_Dperp
 
         if myargs.mtrDW_image_filename:
             mtrDW=mtrDW_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j]]
@@ -413,10 +417,7 @@ if not (myargs.visualize or myargs.sortMT):
         
         
         #TIs=TIs_allslices[voxels[2][j]]
-                
-                
-        
-        
+
         
         #TRs=TRs_allslices[voxels[2][j]] #HERE do this when have the whole TR history in signal comp.
  
@@ -430,7 +431,12 @@ if not (myargs.visualize or myargs.sortMT):
             MTs = np.zeros(number_of_fibers)
             Dparfit=np.zeros(number_of_fibers)
             #MTsandDparfit=np.zeros([number_of_fibers,2])
-            fit = mtsolver.GetMTs()
+            if (myargs.writeMT): #just write the inputed MT to the output
+                fit = MTin
+                MTsandDparfit = fit
+            else:
+                fit = mtsolver.GetMTs()
+
             if (fit is not None):
                 if linear_fit:
                     MTsandDparfit=fit;
@@ -706,8 +712,6 @@ if (myargs.sortMT): #sort MTs for other analysis:
             if (number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]==1): #single fiber      
                 if (abs(fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],0])<=abs(fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],1])): #y
                     print("%f" % float(MT_array[voxels[0][j],voxels[1][j],voxels[2][j],0]))
-
-
 
 if (myargs.visualize):
 
