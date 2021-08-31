@@ -122,7 +122,7 @@ NB: the fixel directory output is mandatory and only works properly for axial im
 parser = argparse.ArgumentParser(description='')
 
 parser.add_argument('-mask', dest='mask_image_filename', help='input mask filename, for computation or visualization. If for visualization, must be the same mask previously used for computation', required=True, nargs=1)
-parser.add_argument('-vic', dest='vic_image_filename', help='input vic filename, for computation only (not neede for mean tensor option).', required=False, nargs=1)
+parser.add_argument('-vic', dest='vic_image_filename', help='input vic filename, for computation only (not needed for mean tensor option).', required=False, nargs=1)
 parser.add_argument('-S0', dest='S0_image_filename', help='input S0 filename, optinally used to stabilize fits', required=False, nargs=1)
 parser.add_argument('-T1B0', dest='T1B0_image_filename', help='input computed T1 b=0 filename, optinally used as initial guess in fits', required=False, nargs=1)
 parser.add_argument('-afd', dest='afd_image_filename', help='input AFD filename, currently required even for -vis', required=True, nargs=1)
@@ -141,6 +141,8 @@ parser.add_argument('-S0_out', dest='S0out_filename', help='S0-out filename: out
 parser.add_argument('-cost', dest='cost_filename', help='cost filename: output cost image filename, to see quality of fit', required=False, nargs=1)
 parser.add_argument('-fixel',dest='fixel_dir_name', help='output T1 fixel directory name; currently implemented only for axial images!!', required=True, nargs=1)
 parser.add_argument('-Dpar', dest='Dpar_image_filename', help='output D_parallel filename', required=False, nargs=1)
+parser.add_argument('-AD', dest='AD', help='average axial diffusivity',  required=True, nargs=1)
+parser.add_argument('-RD', dest='RD', help='average radial diffusivity',  required=True, nargs=1)
 parser.add_argument('-ADin', dest='AD_image_filename', help='Optional input AD (axial diffusivity) for simulations, make sure sim_input_tensor is set', required=False, nargs=1)
 parser.add_argument('-RDin', dest='RD_image_filename', help='Optional input RD (radial diffusivity) for simulations, make sure sim_input_tensor is set, need to use with ADin', required=False, nargs=1)
 parser.add_argument('-vis', dest='visualize', help='visualize previously computed fiber T1s', required=False, action='store_true')
@@ -267,7 +269,9 @@ AFD_thresh=float(myargs.AFD_thresh[0])
 
 TR=float(myargs.TR[0])
 TE=float(myargs.TE[0])
-
+# this is the assumed tensor shape
+avg_Dpar = float(myargs.AD[0])
+avg_Dperp = float(myargs.RD[0])
 
 
 
@@ -408,12 +412,13 @@ if not (myargs.visualize or myargs.sortT1):
         else:
             T1B0=750 #the initial value for T1
 
-        if myargs.AD_image_filename: #assume both are provided
-            AD = AD_img.get_data()[voxels[0][j], voxels[1][j], voxels[2][j],:]
-            RD = RD_img.get_data()[voxels[0][j], voxels[1][j], voxels[2][j],:]
-        else:
-            AD = 0
-            RD = 0
+        if myargs.AD_image_filename: #assume both are provided (this is only for simulations)
+            ADin = AD_img.get_data()[voxels[0][j], voxels[1][j], voxels[2][j],:]
+            RDin = RD_img.get_data()[voxels[0][j], voxels[1][j], voxels[2][j],:]
+        else: #this is the average tensor read from the input
+            ADin = avg_Dpar
+            RDin = avg_Dperp
+
 
         IR_DWIs=np.zeros((number_of_TIs, number_of_DWIs),float)
 
@@ -438,7 +443,7 @@ if not (myargs.visualize or myargs.sortT1):
 
             #to test fixing D, we have to giev it the voxel coord
 
-            t1solver.SetInputData(fiber_dirs,AFD,IR_DWIs,TIs,grad_table,vic,S0,T1B0,TR,TE,voxels[0][j],voxels[1][j],voxels[2][j],sagittal,set_Dpar_equal,viso,B1,AD,RD)
+            t1solver.SetInputData(fiber_dirs,AFD,IR_DWIs,TIs,grad_table,avg_Dpar,avg_Dperp,vic,S0,T1B0,TR,TE,voxels[0][j],voxels[1][j],voxels[2][j],sagittal,set_Dpar_equal,viso,B1,ADin,RDin)
             T1s=np.zeros(number_of_fibers)
             Dparfit=np.zeros(number_of_fibers)
             S0out = 0
