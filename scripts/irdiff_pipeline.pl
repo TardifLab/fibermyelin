@@ -213,7 +213,7 @@ if ($eddy) {
   `fslswapdim noddi/brain_mask.nii  x -y z noddi/brain_mask-swap.nii`;
   `gunzip noddi/brain_mask-swap.nii.gz` unless -e "noddi/brain_mask-swap.nii";
   print "fslswapdim noddi/dwi_dn.nii  x -y z noddi/dwi_dn-swap.nii\n";
-  `fslswapdim noddi/dwi_dn.nii  x -y z noddi/dwi_dn-swap.nii` unless -e "noddi/dwi_dn-swap.nii.gz";
+  `fslswapdim noddi/dwi_dn.nii  x -y z noddi/dwi_dn-swap.nii` unless -e "noddi/dwi_dn-swap.nii";
   `gunzip noddi/dwi_dn-swap.nii.gz` unless -e "noddi/dwi_dn-swap.nii";
   
   print "bvecs_bvals2camino.pl -vec ../$bvecs -val  ../$bvals -o NODDI.scheme\n";
@@ -276,12 +276,14 @@ print "tensor2metric dt_1000.mif -ad ad.mif -rd rd.mif\n";
 
 print "mrstats ad.mif -output mean -mask single.nii\n";
 $dpar = `mrstats ad.mif -output mean -mask single.nii`;
+chomp($dpar);
 #Dpar = 0.00164679
 
 print "Average dpar is $dpar\n\n";
 
 print "mrstats rd.mif -output mean -mask single.nii\n";
 $dperp = `mrstats rd.mif -output mean -mask single.nii`;
+chomp($dperp);
 #Dperp = 0.000363085
 
 print "Average dperp is $dperp\n\n";
@@ -297,11 +299,13 @@ print "\n=====Pre-process for fiber-myelin=====\n";
 
 #convert the AFD and directions files to non-sparse format:
 #fixel2voxel <afd.mif> split_data <afd_voxel.mif> ...
-print "fixel2voxel fixel_dir/afd.mif split_data afd_voxel.mif\n";
-`fixel2voxel fixel_dir/afd.mif split_data afd_voxel.mif` unless -e "split_data afd_voxel.mif";
+## fixel2voxel funxitonality changed with new mrtrix (2020)
+print "fixel2voxel fixel_dir/afd.mif none afd_voxel.mif\n";
+`fixel2voxel fixel_dir/afd.mif none afd_voxel.mif` unless -e "afd_voxel.mif";
 #fixel2voxel <directions.mif> split_dir <directions_voxel.mif> ...
-print "fixel2voxel fixel_dir/directions.mif split_dir directions_voxel.mif\n";
-`fixel2voxel fixel_dir/directions.mif split_dir directions_voxel.mif` unless -e "directions_voxel.mif";
+#CHANGE  fixel2peaks  dn/fixel_dir/directions.mif  dn/directions_voxel.mif
+print "fixel2peaks fixel_dir/directions.mif directions_voxel.mif\n";
+`fixel2peaks fixel_dir/directions.mif directions_voxel.mif` unless -e "directions_voxel.mif";
 #-crop if necessary, mrcrop...0 offset
 
 #for axial:#mrconvert -stride 1,2,3,4 <afd> ...
@@ -372,17 +376,17 @@ $afd_thresh=0.2;
 #fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output`;
 
 # this is the newer way using a fixed average tensor and fixed S0
-print "\n\nfibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -S0 $meanb0 -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR -TE $TE -fixel fixel_dir-output\n";
-`fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -S0 $meanb0 -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output`;
+print "\n\nfibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -S0 $meanb0 -AD $dpar -RD $dperp -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR -TE $TE -fixel fixel_dir-output >fit-log\n";
+`fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -S0 $meanb0 -AD $dpar -RD $dperp -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output >fit-log`;
 
 
 # mrview V1.mif -fixel.load fixel_dir-output/t1_fixel.nii
 
 ## Now generate a file with the sorted T1 by direction
 # right now it's hard-coded in fibermyelin_pipeline.py but it could be an input
-print "\n\nfibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output -sort > t1sort.txt\n";
+print "\n\nfibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -S0 $meanb0 -AD $dpar -RD $dperp -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output -sort > t1sort.txt\n";
 
-`fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output -sort > t1sort.txt`;
+`fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask  -S0 $meanb0 -AD $dpar -RD $dperp -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output -sort > t1sort.txt`;
 
 
 sub run_matlab {
