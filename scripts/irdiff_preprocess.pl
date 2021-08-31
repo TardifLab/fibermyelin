@@ -25,12 +25,13 @@ $Usage = <<USAGE;
 Prepares the data for the ir-diff pipeline
 
 
-Usage: $program -d <dcmdir>
+Usage: $program -d <dcmdir> -m <mncdir>
 -help for options
 
 USAGE
 
-my @args_table = (["-d","string",1,\$dcmdir,"name of dicom directory"]);
+my @args_table = (["-d","string",1,\$dcmdir,"name of dicom directory"],
+                ["-m","string",1,\$mncdir,"name of mnc directory"]);
 #["-clobber","boolean",undef,\$clobber,"clobber all output files (currently not implemented, sorry)"],#HERE not implemented);
 
 
@@ -40,7 +41,7 @@ GetOptions(\@args_table, \@ARGV, \@args) || exit 1;
 die $Usage unless $#ARGV >=0;
 
 print "---Get the list of sequences from the minc files---\n";
-`lsminc *.mnc.gz > mnclist` unless -e "mnclist";
+`lsminc $mncdir/*.mnc.gz > mnclist` unless -e "mnclist";
 
 print "---Sort the dicom by sequence name and then sequence number-----\n";
 print "sort_dicom.pl $dcmdir/MR* '0018,1030' $dcmdir//\n";
@@ -70,8 +71,8 @@ if ($done eq "") {
 }
 
 #$hardi_nii = `\\ls nii/*cmrrmbep2ddiff*.nii*`; chomp($hardi_nii);
-$hardi_bvec = `\\ls nii/*cmrrmbep2ddiff*.bvec*`; chomp($hardi_bvec);
-$hardi_bval = `\\ls nii/*cmrrmbep2ddiff*.bval*`; chomp($hardi_bval);
+$hardi_bvec = `\\ls nii/*ep2ddiff*.bvec*`; chomp($hardi_bvec);
+$hardi_bval = `\\ls nii/*ep2ddiff*.bval*`; chomp($hardi_bval);
 
 print "\n----Grab a dicom file to be able to read the timing from it------\n";
 $dicom = `\\ls $dcmdir/*_fov1/MR* | grep MR -m 1`;
@@ -81,8 +82,8 @@ $hardid = "hardi-analysis/";
 `mkdir $hardid` unless -e $hardid;
 $done=`\\ls hardi-analysis/dwi.mif`; chomp($done); 
 unless (-e $done) {
-    print "mrconvert $dcmdir/cmrr_mbep2d_diff_multib*/ hardi-analysis/dwi.mif\n";
-    `mrconvert $dcmdir/cmrr_mbep2d_diff_multib*/ hardi-analysis/dwi.mif` ;
+    print "mrconvert $dcmdir/ep2d_diff/ hardi-analysis/dwi.mif\n";
+    `mrconvert $dcmdir/ep2d_diff/ hardi-analysis/dwi.mif` ;
 }
 
 chomp($dicom);
