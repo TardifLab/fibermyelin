@@ -37,8 +37,8 @@ $acq="/data_/tardiflab/ilana/midiff_mgh/acqparams.txt"; #didn't AP-PA so no dist
 
 # TODO: this assume IR-idff always acquired the same way, (2 b=0, 30 Siemens directions, 4 averages)
 # the bvec here has that 1st b=0 removed, have to remove it from the volume in the code, this could be done in the code
-$bvecs_ir="/data_/tardiflab/ilana/midiff_mgh/30bvecs-4avg-rmb0.txt";# 1 b=0, 30 directions, from Siemens built-in
-$bvals_ir="/data_/tardiflab/ilana/midiff_mgh/30bvals-4avg-rmb0.txt";# 1 b=0, 30 directions, b=1000
+#$bvecs_ir="/data_/tardiflab/ilana/midiff_mgh/30bvecs-4avg-rmb0.txt";# 1 b=0, 30 directions, from Siemens built-in
+#$bvals_ir="/data_/tardiflab/ilana/midiff_mgh/30bvals-4avg-rmb0.txt";# 1 b=0, 30 directions, b=1000
 #$bvecs_ir="/data_/tardiflab/ilana/midiff_mgh/30bvecs-8avg-rmb0.txt";# 1 b=0, 30 directions, from Siemens built-in
 #$bvals_ir="/data_/tardiflab/ilana/midiff_mgh/30bvals-8avg-rmb0.txt";# 1 b=0, 30 directions, b=1000
 #$bvecs_ir="/data_/tardiflab/ilana/midiff_mgh/20bvecs-6avg-rmb0.txt";# 1 b=0, 20 directions, from Siemens built-in
@@ -46,9 +46,11 @@ $bvals_ir="/data_/tardiflab/ilana/midiff_mgh/30bvals-4avg-rmb0.txt";# 1 b=0, 30 
 #$bvecs_ir="/data_/tardiflab/ilana/midiff_mgh/64bvecs-2avg-rmb0.txt";# 1 b=0, 20 directions, from Siemens built-in
 #$bvals_ir="/data_/tardiflab/ilana/midiff_mgh/64bvals-2avg-rmb0.txt";# 1 b=0, 20 directions, b=1000
 
-# TODO: right now assume the HARDI is always done the same way, the 108 direction protocol from UNF
-#$scheme="/data_/tardiflab/ilana/midiff_mgh/NODDI.scheme";
-# Create custom one based on bvals and results from eddy
+##MWC
+##TODO read these from the input, don't hard-code
+$bvecs_ir="/data/mril/mril4/ilana/docs/protocols/tardif/nelson/bvec-irdiff";# 1 b=0, 30 directions, generated from gen_scheme, same ones as b1000 shell in multi-shell HARDI
+$bvals_ir="/data/mril/mril4/ilana/docs/protocols/tardif/nelson/bval-irdiff";# 1 b=0, 30 directions, b=1000
+
 
 # index file that tells eddy which line/of the lines in the acqparams.txt file that are relevant for the data passed into eddy.
 $index="/data_/tardiflab/ilana/midiff_mgh/index.txt"; # 
@@ -127,11 +129,12 @@ print "\n-------Now combine the 2 datasets-------\n";
 print "\ncomb_fov('ir-analysis/unshuffle_fov1-remb0.nii','ir-analysis/unshuffle_fov2-remb0.nii','TI.txt','ir-analysis/ir-diff.nii')\n";
 run_matlab("comb_fov('ir-analysis/unshuffle_fov1-remb0.nii','ir-analysis/unshuffle_fov2-remb0.nii','TI.txt','ir-analysis/ir-diff.nii')") unless -e "tmp-ir-diff.nii";
 
-print "---Make sure the spacing is correct---\n";
+## This is now done inside the comb_fov.m matlab code
+#print "---Make sure the spacing is correct---\n";
 #print "mrconvert tmp-ir-diff.nii  -vox ,,2 ir-analysis/ir-diff.nii\n";
 #`mrconvert tmp-ir-diff.nii  -vox ,,2 ir-analysis/ir-diff.nii` unless -e "ir-analysis/ir-diff.nii";
-print "mrconvert tmp-ir-diff.nii  -vox ,,2.6 ir-analysis/ir-diff.nii\n";
-`mrconvert tmp-ir-diff.nii  -vox ,,2.6 ir-analysis/ir-diff.nii` unless -e "ir-analysis/ir-diff.nii";
+#print "mrconvert tmp-ir-diff.nii  -vox ,,2.6 ir-analysis/ir-diff.nii\n";
+#`mrconvert tmp-ir-diff.nii  -vox ,,2.6 ir-analysis/ir-diff.nii` unless -e "ir-analysis/ir-diff.nii";
 
 #--> fit b=0
 #fslroi ir-diff-reformat.nii b0-ir-diff.nii 0 8
@@ -244,7 +247,7 @@ print "dwi2response tournier $dwi resp.txt -voxels single.nii\nshview resp.txt\n
 #*will only use outer shell*  
 print "dwi2fod csd $dwi resp.txt fod.mif -mask mask.mif\nmrview meanb0.mif -odf.load_sh fod.mif\n";
 `dwi2fod csd $dwi resp.txt fod.mif -mask mask.mif` unless -e "fod.mif";
-`mrview meanb0.mif -odf.load_sh fod.mif`;
+#`mrview meanb0.mif -odf.load_sh fod.mif`;
 
 ### Segment FOD images to estimate fixels and their apparent fibre density
 print "fod2fixel -mask mask.mif fod.mif -afd afd.mif fixel_dir\n";
@@ -253,9 +256,9 @@ print "fod2fixel -mask mask.mif fod.mif -afd afd.mif fixel_dir\n";
 #Integral of the apparent fiber density (AFD) over a FOD 'lobe', i.e. a fiber density per population in the voxel  
 
 #Colored by Apparent Fiber Density  
-`mrview meanb0.mif -fixel.load fixel_dir/afd.mif`  ;
+#`mrview meanb0.mif -fixel.load fixel_dir/afd.mif`  ;
 #Colored by direction  
-`mrview meanb0.mif -fixel.load fixel_dir/directions.mif`;
+#`mrview meanb0.mif -fixel.load fixel_dir/directions.mif`;
 
 #}
 
@@ -364,6 +367,12 @@ $mask = "roi_strides.nii";
 
 $TR = `more ../info.txt | grep TR | grep -Eo '[0-9]+'`;chomp($TR); #in ms
 $TE = `more ../info.txt | grep TE | grep -Eo '[0-9]+'`;chomp($TE); #in ms
+
+## use the correct bvec and bval file
+#$bvec_ir = `\\ls nii/*ep2dmidiff*.bvec*`; chomp($bvec_ir);
+#$bval_ir = `\\ls nii/*ep2dmidiff*.bval*`; chomp($bval_ir);
+# have to remove the extra b=0 for each average
+
 
 #print "---------Please enter the afd threshold (default=0.1)   : ";
 #$afd_thresh = <STDIN>;
