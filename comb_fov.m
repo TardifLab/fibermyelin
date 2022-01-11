@@ -22,7 +22,7 @@ save('TIcomb.txt', 'combTI', '-ASCII');
 
 % make a volume double the number of slices
 vol_tmp=zeros(x,y,2*z,t);
-vol_tmp(:,:,2:2:end,:) = VOL1; % if volume 2 was shifted up from volume 1
+vol_tmp(:,:,2:2:end,:) = VOL1; % if volume 2 was shifted down from volume 1
 vol_tmp(:,:,1:2:end,:) = VOL2;
 
 hdr=HDR;
@@ -32,11 +32,11 @@ hdr.file_name=name;
 hdr.info.dimensions=[x y 2*z t];
 niak_write_nifti(hdr,vol_tmp);
 
-%in the terminal, change the slice spacing
-cmd=strcat('mrconvert',{' '},tmp,'  -vox ,,2 ',{' '},output);
-cmd2 = cell2str_v2(cmd);
-system(cmd2);
-
+%in the terminal, change the slice spacing to 1/2 what the original was
+vsize = hdr.info.voxel_size(3)/2;
+cmd=sprintf('mrconvert %s -vox ,,%f %s',name,vsize,output);
+cmd
+system(cmd);
 
 
 % the other file from mrtrix is meed up, read it in here and write out
