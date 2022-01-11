@@ -24,7 +24,7 @@ import random
 #hardcoded global vars:
 
 global plot_fit
-plot_fit=True
+plot_fit=False
 
 global just_b0
 just_b0 = False #have to set here and in calling script fibermyelin_pipeline.py, a
@@ -36,7 +36,7 @@ sim_noise_level=10 #S0 is hardcoded to 500 below, so 10 is 2%, 15 is 3%
 global sim_S0
 sim_S0=500
 global plot_res #this plots the residuals by iterating over solutions, only use this with 1 voxel!
-plot_res=True #plot_fit needs to be True as well
+plot_res=False #plot_fit needs to be True as well
 
 #simulation: will read in values instead of assuming they are fixed
 global sim_input_tensor
@@ -46,8 +46,10 @@ if sim_input_tensor:
 
 global avg_tensor #use a fixed tensor for all fibers
 avg_tensor = True
-global avg_Dpar
-global avg_Dperp
+# Aug 2021, I now waht to specify on the command line, not hard-code
+
+#global avg_Dpar
+#global avg_Dperp
 #avg_Dpar = 0.00151984
 #avg_Dperp = 0.00029019
 # only b=1000 shell
@@ -59,8 +61,8 @@ global avg_Dperp
 #avg_Dperp = 0.000342671
 
 # from Aug 21 2020 (run2) dataset (b=1000 shell) and all single fiber voxels
-avg_Dpar = 0.00163619
-avg_Dperp = 0.000371012
+#avg_Dpar = 0.00163619
+#avg_Dperp = 0.000371012
 
 # for the asparagus scan on Jan 29, 2019
 #avg_Dpar = 0.00150316
@@ -188,9 +190,9 @@ class FiberT1Solver:
             self.lowerbounds[self.number_of_fibers] = 0.1E-3  # 0#
             self.upperbounds[self.number_of_fibers] = 5.0E-3  # np.inf
             if avg_tensor: #the better way would be to re-write the code so it doesn't fit this param at all...
-                self.init_params[self.number_of_fibers] = avg_Dpar  # Dpar in mm2/s
-                self.lowerbounds[self.number_of_fibers] = avg_Dpar-1E-6# don't let it vary
-                self.upperbounds[self.number_of_fibers] = avg_Dpar+1E-6# don't let it vary
+                self.init_params[self.number_of_fibers] = self.AD  # Dpar in mm2/s
+                self.lowerbounds[self.number_of_fibers] = self.AD-1E-6# don't let it vary
+                self.upperbounds[self.number_of_fibers] = self.AD+1E-6# don't let it vary
             elif fix_tensor: #this only works when both are equal or else I have to rewrite the code...
                 # the better way would be to re-write the code so it doesn't fit this param at all...
                 self.init_params[self.number_of_fibers] = self.ADin[1]  # Dpar in mm2/s
@@ -429,6 +431,9 @@ class FiberT1Solver:
                 args[:, 11 + 6 * k] = self.ADin[k]*np.ones(self.number_of_TIs*self.number_of_diff_encodes) #Dpar
                 args[:, 12 + 6 * k] = self.RDin[k]*np.ones(self.number_of_TIs*self.number_of_diff_encodes) #Dperp
                 #print ("fiber %i, Input AD: %f Input RD: %f" % (k, self.ADin[k] ,self.RDin[k]))
+            if (avg_tensor): #read AD and RD from command line
+                args[:, 11 + 6 * k] = self.AD*np.ones(self.number_of_TIs*self.number_of_diff_encodes) #Dpar
+                args[:, 12 + 6 * k] = self.RD*np.ones(self.number_of_TIs*self.number_of_diff_encodes) #Dperp
 
             #make gnew for each observation
             for j in range(0,self.number_of_diff_encodes):
@@ -595,7 +600,7 @@ class FiberT1Solver:
 
 
                 if (self.number_of_diff_encodes==31):
-                    thisDWI=[0, 21, 5, 30] #these are the index for b=0, and closest to be along z,y,z
+                    thisDWI=[0, 21, 5, 30] #these are the index for b=0, and closest to be along z,y,x
                 if (self.number_of_diff_encodes == 21):
                     thisDWI = [0, 18, 2, 1]
                 if (self.number_of_diff_encodes == 65):
@@ -717,7 +722,7 @@ class FiberT1Solver:
         return res_lsq
 
     #DO: potentially just give inputs upon initialization, or will we reuse? give inputs to GetT1s?
-    def SetInputData(self,fiber_dirs,AFDs,IR_DWIs,TIs,grad_table,vic,S0,T1B0,TR,TE,vox0,vox1,vox2,sag,Dpareq,viso,B1,AD,RD):
+    def SetInputData(self,fiber_dirs,AFDs,IR_DWIs,TIs,grad_table,AD,RD,vic,S0,T1B0,TR,TE,vox0,vox1,vox2,sag,Dpareq,viso,B1,ADin,RDin):
 
 
 
@@ -746,12 +751,15 @@ class FiberT1Solver:
         self.B1=B1
         self.T1B0 = T1B0
         self.S0=S0
-        # if AD and RD are specified for simulation (they are 0 otherwise)
-        self.ADin=AD
-        self.RDin=RD
+        # if ADin and RDin are specified for simulation (they are 0 otherwise)
+        self.ADin=ADin
+        self.RDin=RDin
 
         self.TR = TR
         self.TE = TE
+        # required average tensor
+        self.AD = AD
+        self.RD = RD
 
         self.vox0=vox0
         self.vox1=vox1
@@ -875,8 +883,8 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
                     Dpar=args[h,11+6*i]
                     Dperp=args[h,12+6*i]
                 elif (avg_tensor):
-                    Dpar = avg_Dpar
-                    Dperp = avg_Dperp
+                    Dpar=temp_array[11+6*i]
+                    Dperp=temp_array[12+6*i]
                 elif fix_tensor: # only makes sense when the 2 tensors are equal
                     Dpar = args[h][11+6*i]
                     Dperp = args[h][12+6*i]
@@ -907,6 +915,7 @@ def IRDiffEqn(params,*args): #equation for residuals; params is vector of the un
                         Dterm+=D[j,k]*gnew[j]*gnew[k]
 
                 #print("Dterm %f" % Dterm)
+                #print("Dpar %f Dperp %f" % (Dpar,Dperp))
 
                 term3=np.exp(-bvals[h]*Dterm) # diffusion term for the IR-DWI signal equation
 
