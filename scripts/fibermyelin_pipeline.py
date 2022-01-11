@@ -90,10 +90,8 @@ vis_range=vis_max-vis_min
 
 #end hardcoded stuff
 
-if (just_b0):
+if just_b0:
     set_Dpar_equal=False
-
-
 
 
 print('This a script to process IR-diffusion data\n\
@@ -124,7 +122,8 @@ parser = argparse.ArgumentParser(description='')
 parser.add_argument('-mask', dest='mask_image_filename', help='input mask filename, for computation or visualization. If for visualization, must be the same mask previously used for computation', required=True, nargs=1)
 parser.add_argument('-vic', dest='vic_image_filename', help='input vic filename, for computation only (not needed for mean tensor option).', required=False, nargs=1)
 parser.add_argument('-S0', dest='S0_image_filename', help='input S0 filename, optinally used to stabilize fits', required=False, nargs=1)
-parser.add_argument('-T1B0', dest='T1B0_image_filename', help='input computed T1 b=0 filename, optinally used as initial guess in fits', required=False, nargs=1)
+parser.add_argument('-T1dw', dest='T1dw_image_filename', help='input computed average diffusion-weighted T1, optinally used as initial guess in fits', required=False, nargs=1)
+parser.add_argument('-just_T1dw', dest='just_T1dw', help='flag to compute only diffusion-weighted T1 (direction averaged)', required=False, action='store_true')
 parser.add_argument('-afd', dest='afd_image_filename', help='input AFD filename, currently required even for -vis', required=True, nargs=1)
 parser.add_argument('-afdthresh', dest='AFD_thresh', help='input AFD threshold, required.  For -vis option, AFD threshold must be that used to compute the pre-computed T1 map', required=True, nargs=1)
 parser.add_argument('-dirs', dest='dirs_image_filename', help='input directions filename, currently required even for -vis', required=True, nargs=1)
@@ -213,8 +212,8 @@ else:
         viso_img=nib.Nifti2Image.from_image(nib.load(myargs.viso_image_filename[0]))
     if myargs.S0_image_filename:
         S0_img=nib.Nifti2Image.from_image(nib.load(myargs.S0_image_filename[0]))
-    if myargs.T1B0_image_filename:
-        T1B0_img=nib.Nifti2Image.from_image(nib.load(myargs.T1B0_image_filename[0]))
+    if myargs.T1dw_image_filename:
+        T1dw_img=nib.Nifti2Image.from_image(nib.load(myargs.T1dw_image_filename[0]))
     if myargs.B1_image_filename:
         B1_img=nib.Nifti2Image.from_image(nib.load(myargs.B1_image_filename[0]))
 
@@ -406,11 +405,11 @@ if not (myargs.visualize or myargs.sortT1):
             print('S0: %f' % S0)
         else:
             S0=500
-        if myargs.T1B0_image_filename:
-            T1B0=T1B0_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],0]
-            print('T1 of b=0: %f' % T1B0)
+        if myargs.T1dw_image_filename:
+            T1dw=T1dw_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],0]
+            print('Avg diff-weighted T1: %f' % T1dw)
         else:
-            T1B0=750 #the initial value for T1
+            T1dw=750 #the initial value for T1
 
         if myargs.AD_image_filename: #assume both are provided (this is only for simulations)
             ADin = AD_img.get_data()[voxels[0][j], voxels[1][j], voxels[2][j],:]
@@ -431,23 +430,24 @@ if not (myargs.visualize or myargs.sortT1):
 
         TIs=TIs_allslices[voxels[2][j]]
 
-
-
+        if myargs.just_T1dw:
+            set_Dpar_equal = False
 
 
         #TRs=TRs_allslices[voxels[2][j]] #HERE do this when have the whole TR history in signal comp.
 
-
+        S0out = 0
+        cost = 0
         if (number_of_fibers>0):
             t1solver=FiberT1Solver()
 
             #to test fixing D, we have to giev it the voxel coord
 
             t1solver.SetInputData(fiber_dirs,AFD,IR_DWIs,TIs,grad_table,avg_Dpar,avg_Dperp,vic,S0,T1B0,TR,TE,voxels[0][j],voxels[1][j],voxels[2][j],sagittal,set_Dpar_equal,viso,B1,ADin,RDin)
+
             T1s=np.zeros(number_of_fibers)
             Dparfit=np.zeros(number_of_fibers)
-            S0out = 0
-            cost = 0
+
 
             T1sandDparfit=np.zeros([number_of_fibers,2])
             FullFit =t1solver.GetT1s()
@@ -455,7 +455,7 @@ if not (myargs.visualize or myargs.sortT1):
                 T1sandDparfit = FullFit.x
                 #T1sandDparfit=t1solver.GetT1s()
                 if myargs.S0out_filename:
-                    if just_b0:
+                    if (just_b0 or myargs.just_T1dw):
                         S0out = T1sandDparfit[2]
                     else:
                         S0out = T1sandDparfit[number_of_fibers+2]
@@ -465,14 +465,13 @@ if not (myargs.visualize or myargs.sortT1):
                 T1sandDparfit = None
 
 
-        #hack for just_b0:
-        if (just_b0):
+        #hack for just_b0 just_T1dw:
+        if (just_b0 or myargs.just_T1dw):
             if(number_of_fibers==0):
                 number_of_fibers = 1
                 T1s=np.zeros(number_of_fibers)
                 Dparfit=np.zeros(number_of_fibers)
                 T1sandDparfit=np.zeros(number_of_fibers+1)
-
 
         for i in range(0,number_of_fibers):
             if (T1sandDparfit is not None):
@@ -532,12 +531,9 @@ if not (myargs.visualize or myargs.sortT1):
                     # 			    #   T1s[1] = mean_voxel_T1
                     # 			    #   T1s[2] = mean_voxel_T1
                     ## IRL end of commented section
-
-
-
                     print('Fiber T1: %d' % T1s[i])
                     print('Voxel Dpar: %f' % Dparfit[i])
-                elif (just_b0):
+                elif (just_b0 or myargs.just_T1dw):
                     T1s[i]=T1sandDparfit[0]
                     print('T1: %d' % T1s[0])
                 else:
@@ -555,7 +551,7 @@ if not (myargs.visualize or myargs.sortT1):
                     cost_array[voxels[0][j], voxels[1][j], voxels[2][j]] = cost
             else: #fit is none, set T1 to B=0 value
 
-                T1_array[voxels[0][j], voxels[1][j], voxels[2][j], i] = T1B0
+                T1_array[voxels[0][j], voxels[1][j], voxels[2][j], i] = T1dw
 
         #optional: this plots the single voxel right now:
         #t1solver.VisualizeFibers()
@@ -643,7 +639,7 @@ if not (myargs.visualize or myargs.sortT1):
                     thresh_dirs_array[counter,1,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+1]
                     thresh_dirs_array[counter,2,0]=fiber_dirs_img.get_data()[voxels[0][i],voxels[1][i],voxels[2][i],3*l+2]
 
-		    if (just_b0):
+		    if (just_b0 or myargs.just_T1dw):
 		        t1_fixel_array[counter,0,0]=T1_array_zeroed[voxels[0][i],voxels[1][i],voxels[2][i],0]
 			#print("%d\n" % t1_fixel_array[counter,0,0])
 		    else:
