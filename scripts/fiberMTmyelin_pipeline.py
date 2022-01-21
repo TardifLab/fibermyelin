@@ -292,8 +292,7 @@ else:
                     fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*number_of_fibers+2]=fiber_dirs_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],3*l+2]
                     number_of_fibers+=1
 
-
-        number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]=number_of_fibers
+            number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]=number_of_fibers
 
 
 if not (myargs.visualize or myargs.sortMT):
