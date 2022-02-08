@@ -24,7 +24,7 @@ import random
 #hardcoded global vars:
 
 global plot_fit
-plot_fit=False
+plot_fit=True
 
 global just_b0
 just_b0 = False #have to set here and in calling script fibermyelin_pipeline.py, a
@@ -136,7 +136,7 @@ global fix_D_phantom3
 fix_D_phantom3=False
 
 global set_Dpar_equal
-set_Dpar_equal=True #HERE this has to be true right now because the code hasn't been kept up to date for al cases. have to set here and in calling script
+set_Dpar_equal = True #HERE this has to be true right now because the code hasn't been kept up to date for al cases. have to set here and in calling script
 
 #import scipy
 #print(scipy.__version__)
@@ -156,8 +156,10 @@ class FiberT1Solver:
         # have to hack because we want to use the same code
         if self.just_T1dw:
             set_Dpar_equal = False
+        else:
+            set_Dpar_equal = True
 
-        #set initial estimates for the parameters:
+        # set initial estimates for the parameters:
         if (set_Dpar_equal):
 
             if (not set_noIE):
@@ -301,24 +303,24 @@ class FiberT1Solver:
         #we have number of TIs * number of bvalues observations, need to string them all out and add the constants to each observation
         #fastest varying will be diffusion, then TI
 
-        args=np.zeros((self.number_of_TIs*self.number_of_diff_encodes,11+6*self.number_of_fibers))
+        args=np.zeros((self.number_of_TIs*self.number_of_diff_encodes,11+6*self.number_of_fibers_total))
         #args[:,0]=bvals
         #args[:,1]=observations
         #args[:,2]=TR
-        #args[:,3]=not used right now, could use for fixed neta input
+        #args[:,3]=T1dw T1 of direction averaged data (pre-computed)
         #args[:,4]=TIs
         #args[:,5]=number of fibers
-        #args[:,6]=vic
+        #args[:,6]=number of fibers total (including those sub-threshold)
         #args[:,7,13,7+6*i,...]=AFD(fiber i - 0 offset)
         #args[:,8,14,8+6*i,...]=gradient x direction in coordinate space with fiber dir along x
         #args[:,9,15,9+6*i,...]=gradient y direction in coordinate space with fiber dir along x
         #args[:,10,16,10+6*i,...]=gradient z direction in coordinate space with fiber dir along x
         #args[:,11,17,11+6*i,...]=Dpar(fiber) (used if fix_D_phantom3 or sim_input_tensor)
         #args[:,12,18,12+6*i,...]=Dperp(fiber) (used if fix_D_phantom3 or sim_input_tensor)
-        #args[:,13+6*(self.number_of_fibers-1)]=viso
-        #args[:,14+6*(self.number_of_fibers-1)]=B1
-        #args[:,15+6*(self.number_of_fibers-1)]=TE
-        #args[:,16+6*(self.number_of_fibers-1)]=self.just_T1dw flag to compute only the directionally averaged T1
+        #args[:,13+6*(self.number_of_fibers_total-1)]=viso
+        #args[:,14+6*(self.number_of_fibers_total-1)]=B1
+        #args[:,15+6*(self.number_of_fibers_total-1)]=TE
+        #args[:,16+6*(self.number_of_fibers_total-1)]=self.just_T1dw flag to compute only the directionally averaged T1
 
         if just_b0 : # we are just going to repeat the b=0 images
             for i in range(0,self.number_of_TIs):
@@ -336,11 +338,13 @@ class FiberT1Solver:
                     args[i*self.number_of_diff_encodes+j,4]=self.TIs[i]
 
         #constants:
-        args[:,5]=self.number_of_fibers*np.ones(self.number_of_TIs*self.number_of_diff_encodes)
-        args[:,6]=self.vic*np.ones(self.number_of_TIs*self.number_of_diff_encodes)
-        args[:,13+6*(self.number_of_fibers-1)]=self.viso*np.ones(self.number_of_TIs*self.number_of_diff_encodes)
-        args[:,14+6*(self.number_of_fibers-1)]=self.B1*np.ones(self.number_of_TIs*self.number_of_diff_encodes)
-        for i in range(0,self.number_of_fibers):
+        args[:, 3] = self.T1dw * np.ones(self.number_of_TIs * self.number_of_diff_encodes)
+        args[:,5] = self.number_of_fibers * np.ones(self.number_of_TIs*self.number_of_diff_encodes)
+        args[:,6]  =self.number_of_fibers_total * np.ones(self.number_of_TIs * self.number_of_diff_encodes)
+        #args[:,6]=self.vic*np.ones(self.number_of_TIs*self.number_of_diff_encodes) #we don't use vic anymore
+        args[:,13+6*(self.number_of_fibers_total-1)]=self.viso*np.ones(self.number_of_TIs*self.number_of_diff_encodes)
+        args[:,14+6*(self.number_of_fibers_total-1)]=self.B1*np.ones(self.number_of_TIs*self.number_of_diff_encodes)
+        for i in range(0,self.number_of_fibers_total):
             args[:,7+6*i]=self.AFDs[i]*np.ones(self.number_of_TIs*self.number_of_diff_encodes)
 
         #string out the observations with diffusion fastest varying
@@ -372,12 +376,12 @@ class FiberT1Solver:
 
         # the nominal TR and TE:
         args[:,2]=self.TR*np.ones(self.number_of_TIs*self.number_of_diff_encodes)
-        args[:,15+6*(self.number_of_fibers-1)]=self.TE*np.ones(self.number_of_TIs*self.number_of_diff_encodes)
+        args[:,15+6*(self.number_of_fibers_total-1)]=self.TE*np.ones(self.number_of_TIs*self.number_of_diff_encodes)
         # the flag to compute only the direction averaged T1
-        args[:, 16 + 6 * (self.number_of_fibers - 1)] = np.full((self.number_of_TIs*self.number_of_diff_encodes),self.just_T1dw,dtype=bool)
+        args[:, 16 + 6 * (self.number_of_fibers_total - 1)] = np.full((self.number_of_TIs*self.number_of_diff_encodes),self.just_T1dw,dtype=bool)
 
         # create the g-vector for each fiber in coord system aligned along that fiber:
-        for k in range(0,self.number_of_fibers):
+        for k in range(0,self.number_of_fibers_total):
 
             f=np.zeros(3)
 
@@ -478,7 +482,7 @@ class FiberT1Solver:
 
         # to weight b=0 more (instead of actually acquiring more), repeat N more times:
         N=np.int(0.1*(self.number_of_diff_encodes-1))-1
-        newargs=np.zeros((self.number_of_TIs*self.number_of_diff_encodes+self.number_of_TIs*N,11+6*self.number_of_fibers))
+        newargs=np.zeros((self.number_of_TIs*self.number_of_diff_encodes+self.number_of_TIs*N,11+6*self.number_of_fibers_total))
         for i in range(self.number_of_TIs*self.number_of_diff_encodes):
             newargs[i,:]=args[i,:]
         for j in range(self.number_of_TIs):
@@ -702,15 +706,16 @@ class FiberT1Solver:
 
     #DO: potentially just give inputs upon initialization, or will we reuse? give inputs to GetT1s?
 
-    def SetInputData(self,fiber_dirs,AFDs,IR_DWIs,TIs,grad_table,AD,RD,vic,S0,T1B0,TR,TE,vox0,vox1,vox2,sag,Dpareq,viso,B1,ADin,RDin):
+    def SetInputData(self,fiber_dirs,AFDs,number_of_fibers, IR_DWIs,TIs,grad_table,AD,RD,vic,S0,T1dw,TR,TE,vox0,vox1,vox2,sag,Dpareq,viso,B1,ADin,RDin,T1dw_flag):
 
         self.AFDs = AFDs
 
         # each fiber dir has a vector, fiber_dirs is 2D
         self.fiber_dirs = fiber_dirs
 
-        #number_of_fibers=size of AFD array
-        self.number_of_fibers=len(self.AFDs)
+        #number_of_fibers != size of AFD array because AFD array has all fibers
+        self.number_of_fibers = number_of_fibers
+        self.number_of_fibers_total = len(self.AFDs)
 
         self.IR_DWIs = IR_DWIs
 
@@ -733,7 +738,7 @@ class FiberT1Solver:
         self.RDin=RDin
 
         # set flag if we just want to compute the direction-averaged T1
-        self.just_T1dw = just_T1dw
+        self.just_T1dw = T1dw_flag
         self.TR = TR
         self.TE = TE
         # required average tensor
@@ -766,6 +771,7 @@ def IRDiffEqn(params,*args):  # equation for residuals; params is vector of the 
     # DO: should add a term to tortuosity computation that is a factor of T1 (params) to incorp myelin
     # (although tortuousity model is wrong, period, so need DIAMOND or something else
 
+    global set_Dpar_equal
     if len(np.shape(args)) != 2:
         args = args[0][:][:]
 
@@ -784,27 +790,29 @@ def IRDiffEqn(params,*args):  # equation for residuals; params is vector of the 
 
     temp_array = args[0]
     TR = temp_array[2] # currently a constant; we don't have a sequence with a different but constant TR per slice. Need Bloch sim if it varies.
-    numfibers = int(temp_array[5]) #repeated constant
+    T1dw = int(temp_array[3])  # repeated constant
+    numfibers = int(temp_array[5])  # repeated constant
+    numfibers_total = int(temp_array[6])
     if fix_vic:
         vic = fixed_vic  #global variable
-    else:
-        vic = temp_array[6] #repeated constant
-    viso = temp_array[13+6*(numfibers-1)] #repeated constant
-    B1 = temp_array[14+6*(numfibers-1)] #repeated constant
-    TE = temp_array[15+6*(numfibers-1)]
-    if temp_array[16 + 6 * (numfibers - 1)]:
+    #else: # we are no longer using vic
+    #    vic = temp_array[6] #repeated constant
+    viso = temp_array[13+6*(numfibers_total-1)] #repeated constant
+    B1 = temp_array[14+6*(numfibers_total-1)] #repeated constant
+    TE = temp_array[15+6*(numfibers_total-1)]
+    if temp_array[16 + 6 * (numfibers_total - 1)]:
         just_T1dw = True
         set_Dpar_equal = False
     else:
         just_T1dw = False
 
-    AFD = np.zeros(numfibers)
-    for j in range(0,numfibers):
+    AFD = np.zeros(numfibers_total)
+    for j in range(0,numfibers_total):
         AFD[j] = temp_array[7+6*j]
 
-    gnewx = np.zeros([number_of_obs, numfibers])
-    gnewy = np.zeros([number_of_obs, numfibers])
-    gnewz = np.zeros([number_of_obs, numfibers])
+    gnewx = np.zeros([number_of_obs, numfibers_total])
+    gnewy = np.zeros([number_of_obs, numfibers_total])
+    gnewz = np.zeros([number_of_obs, numfibers_total])
 
     for i in range(0, number_of_obs):
         temp_array = args[i]
@@ -821,23 +829,28 @@ def IRDiffEqn(params,*args):  # equation for residuals; params is vector of the 
     out = np.zeros(number_of_obs)
 
     # normalize the AFD:
-    norm_AFD=np.zeros(numfibers)
+    norm_AFD=np.zeros(numfibers_total)
     sum_AFD=np.sum(AFD)
-    for i in range(0,numfibers):
+    for i in range(0,numfibers_total):
         norm_AFD[i] = AFD[i]/sum_AFD
 
     for h in range(0,number_of_obs):
         if (not just_b0) and (not just_T1dw):
-            for i in range(0,numfibers):
+            for i in range(0,numfibers_total):
                 term1=norm_AFD[i]
 
                 if set_Dpar_equal:
-                    #params[i] is T1 for fiber i
-                    #inversion efficiency IE is params[numfibers+3]
+                    # params[i] is T1 for fiber i
+                    # inversion efficiency IE is params[numfibers+3]
+                    if i < numfibers:  # above threshold
+                        T1_current = params[i]
+                    else: # below threshold fiber, set to average T1 of diff data (T1dw)
+                        T1_current = T1dw
+
                     if (not set_noIE):  # at the start of the fitting process, params contains the init_params?
-                        term2=SteadyStateT1Recov(params[numfibers+3], B1, TIs[h], TR, TE, params[i])  # function of params[numfibers+3]==IE, B1, TIs, TR, TE, params[i]==(T1 of fiber i)
+                        term2=SteadyStateT1Recov(params[numfibers+3], B1, TIs[h], TR, TE, T1_current)  # function of params[numfibers+3]==IE, B1, TIs, TR, TE, params[i]==(T1 of fiber i)
                     else:
-                        term2=SteadyStateT1RecovnoIE(B1, TIs[h], TR, TE, params[i])
+                        term2=SteadyStateT1RecovnoIE(B1, TIs[h], TR, TE, T1_current)
 
                     #GE ver:
                     #term2=1-2*params[numfibers+3]*np.exp(-1.0*TIs[h]/params[i])+np.exp(-1.0*TR/params[i])

@@ -251,11 +251,13 @@ mask_img=nib.Nifti2Image.from_image(nib.load(myargs.mask_image_filename[0]))
     
 voxels=np.where(mask_img.get_data()>=EPSILON)  
 
-number_of_fibers_array=np.zeros(mask_img.header.get_data_shape(),int)
+number_of_fibers_total_array=np.zeros(mask_img.header.get_data_shape(),int) #these are all the fibers
+number_of_fibers_array=np.zeros(mask_img.header.get_data_shape(),int) #these are the above threshold ones
 
-#make a new AFD and fiber_dirs array for thresholded fiber dirs (they aren't sequential,at least beyond first)
+#make a new AFD and fiber_dirs array for all fiber dirs (not thresholded) (they aren't sequential,at least beyond first)
 AFD_array=np.zeros(AFD_img.header.get_data_shape())
 fiber_dirs_array=np.zeros(fiber_dirs_img.header.get_data_shape())
+
 
 #FSL BEDPOSTX version:
 if (bedpostx):
@@ -279,19 +281,22 @@ voxelcounter=0
 for j in range(len(voxels[0])):
 
     #get number of super-threshold AFDs=number_of_fibers
-    number_of_fibers=0
+    number_of_fibers=0 #only those above threshold
+    number_of_fibers_total = 0
     for l in range(max_fibers):
         #ASSUMING ORDERED and stopping at 3:
         if (l<3):
-            if AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]>AFD_thresh:
-                AFD_array[voxels[0][j],voxels[1][j],voxels[2][j],number_of_fibers]=AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]
-                fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*number_of_fibers]=fiber_dirs_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],3*l]
-                fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*number_of_fibers+1]=fiber_dirs_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],3*l+1]
-                fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*number_of_fibers+2]=fiber_dirs_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],3*l+2]
+            if AFD_img.get_data()[voxels[0][j], voxels[1][j], voxels[2][j], l] > 0:
+                AFD_array[voxels[0][j],voxels[1][j],voxels[2][j],number_of_fibers_total]=AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],l]
+                fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*number_of_fibers_total]=fiber_dirs_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],3*l]
+                fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*number_of_fibers_total+1]=fiber_dirs_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],3*l+1]
+                fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*number_of_fibers_total+2]=fiber_dirs_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],3*l+2]
+                number_of_fibers_total += 1
+            if AFD_img.get_data()[voxels[0][j], voxels[1][j], voxels[2][j], l] > AFD_thresh:
                 number_of_fibers+=1
 
-
     number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]=number_of_fibers
+    number_of_fibers_total_array[voxels[0][j], voxels[1][j], voxels[2][j]] = number_of_fibers_total
 
 #FSL BEDPOSTX version:
 #note that fiber dirs in this case are in "strided" voxel space
@@ -359,13 +364,12 @@ if not (myargs.visualize or myargs.sortT1):
 
         voxelcounter += 1
 
-        number_of_fibers=number_of_fibers_array[voxels[0][j],voxels[1][j],voxels[2][j]]
+        number_of_fibers_total = number_of_fibers_total_array[voxels[0][j],voxels[1][j],voxels[2][j]]
+        number_of_fibers = number_of_fibers_array[voxels[0][j], voxels[1][j], voxels[2][j]]
+        AFD=np.zeros(number_of_fibers_total,float)
+        fiber_dirs=np.zeros((number_of_fibers_total,3),float)
 
-        AFD=np.zeros(number_of_fibers,float)
-        fiber_dirs=np.zeros((number_of_fibers,3),float)
-
-
-        for i in range(0,number_of_fibers):
+        for i in range(0,number_of_fibers_total):
             #for unthresholded only:
             #AFD[i]=AFD_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],i]
 #            fiber_dirs[i,0]=fiber_dirs_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],3*i]
@@ -373,16 +377,16 @@ if not (myargs.visualize or myargs.sortT1):
 #            fiber_dirs[i,2]=fiber_dirs_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j],3*i+2]
             AFD[i]=AFD_array[voxels[0][j],voxels[1][j],voxels[2][j],i]
 
-
             fiber_dirs[i,0]=fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*i]
             fiber_dirs[i,1]=fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*i+1]
             fiber_dirs[i,2]=fiber_dirs_array[voxels[0][j],voxels[1][j],voxels[2][j],3*i+2]
 
         print('\n---Fit [%i/%i]' % (voxelcounter, len(voxels[0])))
-        print('number_of_fibers %i:' % number_of_fibers)
+        print('number_of_fibers_total %i:' % number_of_fibers_total)
         print(fiber_dirs)
         print("AFDs:")
         print(AFD)
+        print('number_of_fibers above threshold %i:' % number_of_fibers)
 
         if myargs.vic_image_filename:
             vic=vic_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j]]
@@ -441,9 +445,9 @@ if not (myargs.visualize or myargs.sortT1):
         if (number_of_fibers>0):
             t1solver=FiberT1Solver()
 
-            #to test fixing D, we have to giev it the voxel coord
+            #to test fixing D, we have to give it the voxel coord
 
-            t1solver.SetInputData(fiber_dirs,AFD,IR_DWIs,TIs,grad_table,avg_Dpar,avg_Dperp,vic,S0,T1B0,TR,TE,voxels[0][j],voxels[1][j],voxels[2][j],sagittal,set_Dpar_equal,viso,B1,ADin,RDin)
+            t1solver.SetInputData(fiber_dirs,AFD,number_of_fibers,IR_DWIs,TIs,grad_table,avg_Dpar,avg_Dperp,vic,S0,T1dw,TR,TE,voxels[0][j],voxels[1][j],voxels[2][j],sagittal,set_Dpar_equal,viso,B1,ADin,RDin,myargs.just_T1dw)
 
             T1s=np.zeros(number_of_fibers)
             Dparfit=np.zeros(number_of_fibers)
