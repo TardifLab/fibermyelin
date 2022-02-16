@@ -84,11 +84,15 @@ $done=`\\ls hardi-analysis/dwi.mif`; chomp($done);
 unless (-e $done) {
     print "mrconvert $dcmdir/ep2d_diff/ hardi-analysis/dwi.mif\n";
     `mrconvert $dcmdir/ep2d_diff/ hardi-analysis/dwi.mif` ;
+    print "mrconvert $dcmdir/ep2d_diff_AP/ hardi-analysis/dwi_b0AP.mif\n";
+     `mrconvert $dcmdir/ep2d_diff_AP/ hardi-analysis/dwi_b0AP.mif`;
+    print "mrconvert $dcmdir/ep2d_diff_PA/ hardi-analysis/dwi_b0PA.mif\n";
+    `mrconvert $dcmdir/ep2d_diff_PA/ hardi-analysis/dwi_b0PA.mif`;
 }
 
 chomp($dicom);
 print "------\n";
-#print "irdiff_pipeline.pl -irdiff nii/*{fov1,fov2}*.nii.gz -bvecs nii/*{fov1,fov2}*.bvec -bvals nii/*{fov1,fov2}*.bval -hardi hardi-analysis/dwi.mif -dcm $dicom > log\n\n";
-print "irdiff_pipeline.pl -irdiff nii/*{fov1,fov2}*.nii.gz -hardi hardi-analysis/dwi.mif -bvecs $hardi_bvec -bvals $hardi_bval -dcm $dicom > log\n\n";
+#print "irdiff_pipeline.pl -irdiff nii/*{fov1,fov2}*.nii.gz -bvecs nii/*{fov1,fov2}*.bvec -bvals nii/*{fov1,fov2}*.bval -hardi hardi-analysis/dwi.mif -b0AP hardi-analysis/dwi_b0AP.mif -b0PA hardi-analysis/dwi_b0PA.mif -dcm $dicom > log\n\n";
+print "irdiff_pipeline.pl -irdiff nii/*{fov1,fov2}*.nii.gz -hardi hardi-analysis/dwi.mif  -b0AP hardi-analysis/dwi_b0AP.mif -b0PA hardi-analysis/dwi_b0PA.mif -bvecs $hardi_bvec -bvals $hardi_bval -dcm $dicom > log\n\n";
 
 print "------\n";
