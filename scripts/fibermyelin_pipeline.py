@@ -442,7 +442,7 @@ if not (myargs.visualize or myargs.sortT1):
 
         S0out = 0
         cost = 0
-        if (number_of_fibers>0):
+        if (number_of_fibers_total>0):
             t1solver=FiberT1Solver()
 
             #to test fixing D, we have to give it the voxel coord
@@ -471,11 +471,11 @@ if not (myargs.visualize or myargs.sortT1):
 
         #hack for just_b0 just_T1dw:
         if (just_b0 or myargs.just_T1dw):
-            if(number_of_fibers==0):
+            if(number_of_fibers==0): # this will likely happen in CSF and maybe in GM but there are still fibers below threshold
                 number_of_fibers = 1
                 T1s=np.zeros(number_of_fibers)
                 Dparfit=np.zeros(number_of_fibers)
-                T1sandDparfit=np.zeros(number_of_fibers+1)
+                #T1sandDparfit=np.zeros(number_of_fibers+1)
 
         for i in range(0,number_of_fibers):
             if (T1sandDparfit is not None):
@@ -553,7 +553,7 @@ if not (myargs.visualize or myargs.sortT1):
                     S0out_array[voxels[0][j], voxels[1][j], voxels[2][j]] = S0out
                 if myargs.cost_filename:
                     cost_array[voxels[0][j], voxels[1][j], voxels[2][j]] = cost
-            else: #fit is none, set T1 to B=0 value
+            else: #fit is none, set T1 to average T1dw value
 
                 T1_array[voxels[0][j], voxels[1][j], voxels[2][j], i] = T1dw
 
