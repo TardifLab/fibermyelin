@@ -50,10 +50,12 @@ $acq="/data_/tardiflab/ilana/midiff_mgh/acqparams.txt"; #didn't AP-PA so no dist
 ##TODO read these from the input, don't hard-code
 $bvecs_ir="/data/mril/mril4/ilana/docs/protocols/tardif/nelson/bvec-irdiff";# 1 b=0, 30 directions, generated from gen_scheme, same ones as b1000 shell in multi-shell HARDI
 $bvals_ir="/data/mril/mril4/ilana/docs/protocols/tardif/nelson/bval-irdiff";# 1 b=0, 30 directions, b=1000
-
+$bvec0 = "/data/mril/mril4/ilana/docs/protocols/tardif/nelson/bvec0"; # a single b=0
+$bval0 = "/data/mril/mril4/ilana/docs/protocols/tardif/nelson/bval0"; # a single b=0
 
 # index file that tells eddy which line/of the lines in the acqparams.txt file that are relevant for the data passed into eddy.
-$index="/data_/tardiflab/ilana/midiff_mgh/index.txt"; # 
+#$index="/data_/tardiflab/ilana/midiff_mgh/index.txt"; #
+$index="/data/mril/mril4/ilana/docs/protocols/tardif/nelson/index-irdiff.txt";
 
 #DO : niak (matlab interface for nii) needs unzippped nii files, so have to unzip before any calls, should find a way around this...
 
@@ -64,6 +66,8 @@ my @args_table = (#["-clobber","boolean",undef,\$clobber,"clobber all output fil
     #[
 #["-anat","string",2,\@anatfiles,"anatomical (T1w pre-contrast) nii file and minc file."],
     ["-hardi","string",1,\$hardi,"HARDI diffusion images in .mif format (gradient info included)"],
+    ["-b0AP","string",1,\$b0AP,"b=0 in AP direction in .mif format"],
+    ["-b0PA","string",1,\$b0PA,"b=0 in PA direction in .mif format"],
     ["-bvecs","string",1,\$bvecs,"bvec files for hardi"],
      ["-bvals","string",1,\$bvals,"bval files for hardi"],
     ["-dcm","string",1,\$dicom,"name of a single dicom file from the ir-diff epxeriment (to read timing info)"],
@@ -149,87 +153,97 @@ run_matlab("comb_fov('ir-analysis/unshuffle_fov1-remb0.nii','ir-analysis/unshuff
 #@bval = <BVAL>; #slurp all files, each line at an index
 #we want to get rid of the 1st b=0 at the beginning of each average
 
+#axial:
+#need to mrconvert -stride 1,2,3,4
+print "mrconvert -stride 1,2,3,4 ir-analysis/ir-diff.nii ir-analysis/ir-diff-strides.nii\n";
+`mrconvert -stride 1,2,3,4 ir-analysis/ir-diff.nii ir-analysis/ir-diff-strides.nii` unless -e "ir-analysis/ir-diff-strides.nii";
 
+#Now some pre-processing
+print "\n--Pre-prcoess the ir-diff----\n";
+print "dwidenoise ir-analysis/ir-diff-strides.nii ir-analysis/ir-diff-strides_dn.nii -noise ir-analysis/noise.mif\n";
+`dwidenoise ir-analysis/ir-diff-strides.nii ir-analysis/ir-diff-strides_dn.nii -noise ir-analysis/noise.mif` unless -e "ir-analysis/noise.mif";
+print "mrcalc ir-analysis/ir-diff-strides.nii ir-analysis/ir-diff-strides_dn.nii  -subtract ir-analysis/res.mif\n";
+`mrcalc ir-analysis/ir-diff-strides.nii ir-analysis/ir-diff-strides_dn.nii  -subtract ir-analysis/res.mif` unless -e "ir-analysis/res.mif";
+print "mrdegibbs .r-analysis/ir-diff-strides_dn.nii ir-analysis/ir-diff-strides_dn_degibbs.nii\n";
+`mrdegibbs ir-analysis/ir-diff-strides_dn.nii ir-analysis/ir-diff-strides_dn_degibbs.nii` unless -e "ir-analysis/ir-diff-strides_dn_degibbs.nii";
+
+#Now get the 1st b=0 from the ir-diff dataset and use it as a reference for the HARDI
+print "mrconvert -coord 3 0 ir-analysis/ir-diff-strides_dn_degibbs.nii - | mrconvert - -fslgrad $bvec0 $bval0 hardi-analysis/b0-ir-diff.mif\n";
+`mrconvert -coord 3 0 ir-analysis/ir-diff-strides_dn_degibbs.nii - | mrconvert - -fslgrad $bvec0 $bval0 hardi-analysis/b0-ir-diff.mif` unless -e "hardi-analysis/b0-ir-diff.mif";
 print "\n=============HARDI processing===========\n";
 chdir("hardi-analysis");
 
- # extract the b=0s
-print "dwiextract -bzero ../$hardi b0s_AP.mif\n";
-`dwiextract -bzero ../$hardi b0s_AP.mif`;
 ## Preprocessing
 ### denoising
 print "dwidenoise ../$hardi dwi_dn.mif -noise noise.mif\n";
 `dwidenoise ../$hardi dwi_dn.mif -noise noise.mif` unless -e "dwi_dn.mif";
 print "mrcalc ../$hardi dwi_dn.mif -subtract res.mif\n";
-`mrcalc ../$hardi dwi_dn.mif -subtract res.mif`;
-### Mask the data
-print "dwi2mask dwi_dn.mif mask.mif\nmrview  dwi_dn.mif -roi.load mask.mif\n";
-`dwi2mask dwi_dn.mif mask.mif` unless -e "mask.mif";
-`mrview  dwi_dn.mif -roi.load mask.mif`;
+`mrcalc ../$hardi dwi_dn.mif -subtract res.mif` unless -e "res.mif";
+# remove gibbs ringing
+print "mrdegibbs dwi_dn.mif dwi_dn_degibbs.mif\n";
+`mrdegibbs dwi_dn.mif dwi_dn_degibbs.mif` unless -e "dwi_dn_degibbs.mif";
+
+$dwi_to_use = "dwi_dn_degibbs.mif";
+
+## set up call to top-up and eddy (if the input was provided)
+if (-e "../$b0AP") {
+    # combine 1st b=0 from ir-diff and HARDI
+    print "\n---FSL topup and edddy---\n";
+    print "mrcat -axis 3 b0-ir-diff.mif dwi_dn_degibbs.mif - | mrconvert - -set_property PhaseEncodingDirection j- -set_property TotalReadoutTime 0.0262 dwi_dn_degibbs-w-b0.mif\n";
+    `mrcat -axis 3 b0-ir-diff.mif dwi_dn_degibbs.mif  - | mrconvert - -set_property PhaseEncodingDirection j- -set_property TotalReadoutTime 0.0262 dwi_dn_degibbs-w-b0.mif` unless -e "dwi_dn_degibbs-w-b0.mif";
+    #combine the b=0s
+    print "mrcat -axis 3 ../$b0AP ../$b0PA b0_all.mif\n";
+    `mrcat -axis 3 ../$b0AP ../$b0PA b0_all.mif` unless -e "b0_all.mif";
+    print "dwifslpreproc dwi_dn_degibbs-w-b0.mif dwi_dn-degibbs-w-b0_post-eddy.mif -rpe_header -se_epi b0_all.mif -align_seepi -nocleanup -eddy_options  --data_is_shelled\n";
+    `dwifslpreproc dwi_dn_degibbs-w-b0.mif dwi_dn-degibbs-w-b0_post-eddy.mif -rpe_header -se_epi b0_all.mif -align_seepi -nocleanup -eddy_options " --data_is_shelled"`;
+    # now remove the extra b=0 we added
+    print "mrconvert -coord 3 1:end dwi_dn-degibbs-w-b0_post-eddy.mif dwi_dn-degibbs_post-eddy.mif\n";
+    `mrconvert -coord 3 1:end dwi_dn-degibbs-w-b0_post-eddy.mif dwi_dn-degibbs_post-eddy.mif` unless -e "dwi_dn-degibbs_post-eddy.mif";
+    $dwi_to_use = "dwi_dn-degibbs_post-eddy.mif";
+    # keep the mask that has been produced
+    $fsl_dir = `\\ls -d dwifsl*`; chomp($fsl_dir);
+    $mask = $fsl_dir."/eddy_mask.nii";
+
+}else{ #old behavior without eddy
+    print "\n---no topup and eddy---\n";
+    $mask = "mask.nii";
+    print "dwi2mask $dwi_to_use $mask\n";
+    `dwi2mask $dwi_to_use $mask` unless -e $mask;
+}
+
+## Check the mask
+print "mrview  $dwi_to_use -roi.load $mask\n";
+`mrview  $dwi_to_use -roi.load $mask`;
+
 ### MEan B0 for visualization
-print "dwiextract dwi_dn.mif - -shell 15 | mrmath - mean meanb0.mif -axis 3\n"; 
-`dwiextract dwi_dn.mif - -shell 15 | mrmath - mean meanb0.mif -axis 3`;
+print "dwiextract $dwi_to_use - -shell 15 | mrmath - mean meanb0.mif -axis 3\n";
+`dwiextract $dwi_to_use - -shell 15 | mrmath - mean meanb0.mif -axis 3`;
 
 
 ###### NODDI processing
 print "\n-----NODDI processing-------\n";
 `mkdir noddi` unless -e 'noddi';
-print "mrconvert mask.mif noddi/brain_mask.nii\n";
-`mrconvert mask.mif noddi/brain_mask.nii`;
-print "mrconvert  dwi_dn.mif noddi/dwi_dn.nii\n";
-`mrconvert  dwi_dn.mif noddi/dwi_dn.nii`;
+print "mrconvert -strides 1,-2,3,4 $mask noddi/brain_mask.nii\n";
+`mrconvert -strides 1,-2,3,4 $mask noddi/brain_mask.nii ` unless -e "noddi/brain_mask.nii";
+print "mrconvert -strides 1,-2,3,4  $dwi_to_use noddi/dwi.nii\n";
+`mrconvert -strides 1,-2,3,4 $dwi_to_use noddi/dwi.nii` unless -e "noddi/dwi.nii";
 
-$eddy =0;
-if ($eddy) {
-  print "eddy_openmp --data_is_shelled --imain=noddi/dwi_dn.nii --mask=noddi/brain_mask.nii --acqp=$acq --index=$index --bvecs=../$bvecs --bvals=../$bvals --out=noddi/diff_eddy-corr\n";
-  `eddy_openmp --data_is_shelled --imain=noddi/dwi_dn.nii --mask=noddi/brain_mask.nii --acqp=$acq --index=$index --bvecs=../$bvecs --bvals=../$bvals --out=noddi/diff_eddy-corr` unless -e "noddi/diff_eddy-corr.eddy_parameters";
+#---ugggh the mrconvert flipped it upside down... grrrr
+#print "fslswapdim noddi/brain_mask.nii  x -y z noddi/brain_mask-swap.nii\n";
+#`fslswapdim noddi/brain_mask.nii  x -y z noddi/brain_mask-swap.nii`;
+#`gunzip noddi/brain_mask-swap.nii.gz` unless -e "noddi/brain_mask-swap.nii";
+#print "fslswapdim noddi/dwi.nii  x -y z noddi/dwi-swap.nii\n";
+#`fslswapdim noddi/dwi.nii  x -y z noddi/dwi-swap.nii` unless -e "noddi/dwi-swap.nii";
+#`gunzip noddi/dwi-swap.nii.gz` unless -e "noddi/dwi-swap.nii";
 
+print "bvecs_bvals2camino.pl -vec ../$bvecs -val  ../$bvals -o NODDI.scheme\n";
+`bvecs_bvals2camino.pl -vec ../$bvecs -val  ../$bvals -o NODDI.scheme`;
 
-  #---ugggh the mrconvert flipped it upside down... grrrr
-  print "fslswapdim noddi/brain_mask.nii  x -y z noddi/brain_mask-swap.nii\n";
-  `fslswapdim noddi/brain_mask.nii  x -y z noddi/brain_mask-swap.nii`;
-  `gunzip noddi/brain_mask-swap.nii.gz` unless -e "noddi/brain_mask-swap.nii";
-  print "fslswapdim noddi/diff_eddy-corr.nii  x -y z noddi/diff_eddy-corr-swap.nii\n";
-  `fslswapdim noddi/diff_eddy-corr.nii  x -y z noddi/diff_eddy-corr-swap.nii` unless -e "noddi/diff_eddy-corr-swap.nii.gz";
-  `gunzip noddi/diff_eddy-corr-swap.nii.gz` unless -e "noddi/diff_eddy-corr-swap.nii";
+print "AMICO_process('./','','noddi/dwi.nii','noddi/brain_mask.nii','NODDI.scheme')\n";
+run_matlab("AMICO_process('./','','noddi/dwi.nii','noddi/brain_mask.nii','NODDI.scheme')") unless -e "AMICO/NODDI/FIT_ICVF.nii";
 
-  $eddy_nogz = "noddi/diff_eddy-corr-swap.nii";
-
-  # redo the scheme file based on modified bvecs
-  print "bvecs_bvals2camino.pl -vec noddi/diff_eddy-corr.eddy_rotated_bvecs -val  ../$bvals -o NODDI.scheme\n";
-  `bvecs_bvals2camino.pl -vec noddi/diff_eddy-corr.eddy_rotated_bvecs -val  ../$bvals -o NODDI.scheme`;
-
-  print "AMICO_process('./','','$eddy_nogz','noddi/brain_mask-swap.nii','NODDI.scheme')\n";
-  run_matlab("AMICO_process('./','','$eddy_nogz','noddi/brain_mask-swap.nii','NODDI.scheme')") unless -e "AMICO/NODDI/FIT_ICVF.nii";
-
-  ###### mrtrix processing
-  print "\n-----Fiber orientation/AFD processing (mrtrix)-------\n";
-  # use the denoised, eddy-corrected output as input to this step
-  print "mrconvert -fslgrad noddi/diff_eddy-corr.eddy_rotated_bvecs ../$bvals  $eddy_nogz  dwi_dn_ed.mif\n";
-  `mrconvert -fslgrad noddi/diff_eddy-corr.eddy_rotated_bvecs ../$bvals $eddy_nogz dwi_dn_ed.mif`;
-
-  $dwi = "dwi_dn_ed.mif";
-
-}else{
-  #---ugggh the mrconvert flipped it upside down... grrrr
-  print "fslswapdim noddi/brain_mask.nii  x -y z noddi/brain_mask-swap.nii\n";
-  `fslswapdim noddi/brain_mask.nii  x -y z noddi/brain_mask-swap.nii`;
-  `gunzip noddi/brain_mask-swap.nii.gz` unless -e "noddi/brain_mask-swap.nii";
-  print "fslswapdim noddi/dwi_dn.nii  x -y z noddi/dwi_dn-swap.nii\n";
-  `fslswapdim noddi/dwi_dn.nii  x -y z noddi/dwi_dn-swap.nii` unless -e "noddi/dwi_dn-swap.nii";
-  `gunzip noddi/dwi_dn-swap.nii.gz` unless -e "noddi/dwi_dn-swap.nii";
-  
-  print "bvecs_bvals2camino.pl -vec ../$bvecs -val  ../$bvals -o NODDI.scheme\n";
-  `bvecs_bvals2camino.pl -vec ../$bvecs -val  ../$bvals -o NODDI.scheme`;
-
-  print "AMICO_process('./','','noddi/dwi_dn-swap.nii','noddi/brain_mask-swap.nii','NODDI.scheme')\n";
-  run_matlab("AMICO_process('./','','noddi/dwi_dn-swap.nii','noddi/brain_mask-swap.nii','NODDI.scheme')") unless -e "AMICO/NODDI/FIT_ICVF.nii";
-
-  ###### mrtrix processing
-  print "\n-----Fiber orientation/AFD processing (mrtrix)-------\n";
-  $dwi = "dwi_dn.mif";
-}
-
+###### mrtrix processing
+print "\n-----Fiber orientation/AFD processing (mrtrix)-------\n";
 
 #if this file exists don't run through everyting
 $done=0;
@@ -237,21 +251,21 @@ if (-e "fixel_dir/afd.mif"){print "HARDI processing seems to be done...\n"; $don
 #if ($done==0){
 
 ### Fiber response estimation  
-print "dwi2response tournier $dwi resp.txt -voxels single.nii\nshview resp.txt\n";
-`dwi2response tournier $dwi resp.txt -voxels single.nii` unless -e "resp.txt";
+print "dwi2response tournier $dwi_to_use resp.txt -voxels single.nii\nshview resp.txt\n";
+`dwi2response tournier $dwi_to_use resp.txt -voxels single.nii` unless -e "resp.txt";
 `shview resp.txt`;
 
 ### Constrained spherical deconvolution  
 #$ dwi2fod csd Input DWI Input response text file Output FOD image -mask Input DWI mask  
 #$ mrview Input DWI -odf.load_sh Output FOD image
 #*will only use outer shell*  
-print "dwi2fod csd $dwi resp.txt fod.mif -mask mask.mif\nmrview meanb0.mif -odf.load_sh fod.mif\n";
-`dwi2fod csd $dwi resp.txt fod.mif -mask mask.mif` unless -e "fod.mif";
+print "dwi2fod csd $dwi_to_use resp.txt fod.mif -mask $mask\nmrview meanb0.mif -odf.load_sh fod.mif\n";
+`dwi2fod csd $dwi_to_use resp.txt fod.mif -mask $mask` unless -e "fod.mif";
 #`mrview meanb0.mif -odf.load_sh fod.mif`;
 
 ### Segment FOD images to estimate fixels and their apparent fibre density
-print "fod2fixel -mask mask.mif fod.mif -afd afd.mif fixel_dir\n";
-`fod2fixel -mask mask.mif fod.mif -afd afd.mif fixel_dir` unless -e "fixel_dir/afd.mif";
+print "fod2fixel -mask $mask fod.mif -afd afd.mif fixel_dir\n";
+`fod2fixel -mask $mask fod.mif -afd afd.mif fixel_dir` unless -e "fixel_dir/afd.mif";
 
 #Integral of the apparent fiber density (AFD) over a FOD 'lobe', i.e. a fiber density per population in the voxel  
 
@@ -268,8 +282,8 @@ print "fod2fixel -mask mask.mif fod.mif -afd afd.mif fixel_dir\n";
 # use this as a fixed parameter in the fitting
 print "\n\n=======Using the average tensor instead of NODDI========\n";
 print "\n-----Extract the b=1000 shell\n";
-print "dwiextract -shells 0,1000 $dwi dwi_dn-1000shell.mif\n";
-`dwiextract -shells 0,1000 $dwi dwi_dn-1000shell.mif` unless -e "dwi_dn-1000shell.mif";
+print "dwiextract -shells 0,1000 $dwi_to_use dwi_dn-1000shell.mif\n";
+`dwiextract -shells 0,1000 $dwi_to_use dwi_dn-1000shell.mif` unless -e "dwi_dn-1000shell.mif";
 
 print "\n-----Compute tensor from b=1000 shell\n";
 print"dwi2tensor dwi_dn-1000shell.mif dt_1000.mif\n";
@@ -324,9 +338,10 @@ print "mrconvert -stride 1,2,3,4 directions_voxel.mif directions_voxel_strides.n
 #steps: ir-diff
 #make sure it came directly from dcm
 #axial:
-#need to mrconvert -stride 1,2,3,4 
-print "mrconvert -stride 1,2,3,4 ../ir-analysis/ir-diff.nii ../ir-analysis/ir-diff-strides.nii\n";
-`mrconvert -stride 1,2,3,4 ../ir-analysis/ir-diff.nii ../ir-analysis/ir-diff-strides.nii` unless -e "../ir-analysis/ir-diff-strides.nii";
+#need to mrconvert -stride 1,2,3,4
+# I moved this to above
+#print "mrconvert -stride 1,2,3,4 ../ir-analysis/ir-diff.nii ../ir-analysis/ir-diff-strides.nii\n";
+#`mrconvert -stride 1,2,3,4 ../ir-analysis/ir-diff.nii ../ir-analysis/ir-diff-strides.nii` unless -e "../ir-analysis/ir-diff-strides.nii";
 
 #if sagittal, mrconvert -stride 3,1,2,4 
 #then, **flip in x, using fix_IRdiff_sag.py** OR just set strides to -3,1,2,4
@@ -342,17 +357,12 @@ print "mrconvert -stride 1,2,3,4 ../ir-analysis/ir-diff.nii ../ir-analysis/ir-di
 print "fslswapdim AMICO/NODDI/FIT_ICVF.nii -x y z AMICO/NODDI/FIT_ICVF-strides.nii\n";
 `fslswapdim AMICO/NODDI/FIT_ICVF.nii -x y z AMICO/NODDI/FIT_ICVF-strides.nii` unless -e "AMICO/NODDI/FIT_ICVF-strides.nii.gz";
 print "fslswapdim noddi/brain_mask-swap.nii  -x y z noddi/brain_mask-swap-strides.nii\n";
-`fslswapdim noddi/brain_mask-swap.nii -x y z  noddi/brain_mask-swap-strides.nii` unless -e "noddi/brain_mask-swap-strides.nii.gz";
-
-print "\n---------Check everything is lined up!-------\n";
-print "/usr/local/bin/fsleyes ../ir-analysis/ir-diff-strides.nii* afd_voxel_strides.nii* AMICO/NODDI/FIT_ICVF-strides.nii* noddi/brain_mask-swap-strides.nii* $meanb0\n";
-`/usr/local/bin/fsleyes ../ir-analysis/ir-diff-strides.nii* afd_voxel_strides.nii* AMICO/NODDI/FIT_ICVF-strides.nii* noddi/brain_mask-swap-strides.nii* $meanb0`;
-
+`fslswapdim noddi/brain_mask.nii -x y z  noddi/brain_mask-swap-strides.nii` unless -e "noddi/brain_mask-swap-strides.nii.gz";
 
 
 print "\n================Now draw the WM region you want to look at (call it roi.mif)=============\n";
-print "dwi2tensor -mask mask.mif $dwi dt.mif \n";
-`dwi2tensor -mask mask.mif $dwi dt.mif `;
+print "dwi2tensor -mask $mask $dwi_to_use dt.mif \n";
+`dwi2tensor -mask $mask $dwi_to_use dt.mif `;
 print "tensor2metric dt.mif -vector V1.mif -modulate FA\n";
 `tensor2metric dt.mif -vector V1.mif -modulate FA`;
 `mrview V1.mif -fixel.load fixel_dir/afd.mif`;
@@ -363,7 +373,7 @@ print "tensor2metric dt.mif -vector V1.mif -modulate FA\n";
 # remember to convert it properly!
 print "mrconvert -stride 1,2,3 roi.mif roi_strides.nii\n";
 `mrconvert -stride 1,2,3 roi.mif roi_strides.nii`;
-$mask = "roi_strides.nii";
+$roi = "roi_strides.nii";
 
 $TR = `more ../info.txt | grep TR | grep -Eo '[0-9]+'`;chomp($TR); #in ms
 $TE = `more ../info.txt | grep TE | grep -Eo '[0-9]+'`;chomp($TE); #in ms
@@ -373,29 +383,70 @@ $TE = `more ../info.txt | grep TE | grep -Eo '[0-9]+'`;chomp($TE); #in ms
 #$bval_ir = `\\ls nii/*ep2dmidiff*.bval*`; chomp($bval_ir);
 # have to remove the extra b=0 for each average
 
+## Before calling the fitting, we also have to apply eddy to the ir-diff dataset (if available)
+if (-e "../$b0AP") {
+    # use the topup result from HARDI and apply
+    print "\n---IR-diff: use topup from HARDI and do eddy correction--\n";
+    # we're only going to use the EC parameters from the HARDI and set all mvt parameters to 0
+    # niter=0 this means that we're not running any motion correction on the ir-diff only EC and topup
+    $bvecs_IRdiff_TIfast = "../ir-analysis/bvecs-IRdiff-TIfast";
+    $bvals_IRdiff_TIfast = "../ir-analysis/bvals-IRdiff-TIfast";
+    print "copy_ec_params.pl -ec_in $fsl_dir/dwi_post_eddy.eddy_parameters -bvals_in $fsl_dir/bvals -bvecs_in $fsl_dir/bvecs -ec_out ../ir-analysis/only-b1000-ec-params.txt -bvals $bvals_IRdiff_TIfast -bvecs $bvecs_IRdiff_TIfast\n";
+    `copy_ec_params.pl -ec_in $fsl_dir/dwi_post_eddy.eddy_parameters -bvals_in $fsl_dir/bvals -bvecs_in $fsl_dir/bvecs -ec_out ../ir-analysis/only-b1000-ec-params.txt -bvals $bvals_IRdiff_TIfast -bvecs $bvecs_IRdiff_TIfast` unless -e $bvecs_IRdiff_TIfast;
+
+    ## NEW version of eddy, otherwise it crashes!!
+    # and for some reason not liking my mask...
+    print "bet ../ir-analysis/ir-diff-strides_dn_degibbs.nii ../ir-analysis/bet -m -n\n";
+    `bet ../ir-analysis/ir-diff-strides_dn_degibbs.nii ../ir-analysis/bet -m -n` unless -e "../ir-analysis/bet_mask.nii.gz";
+
+    print "/data_/tardiflab/01_programs/fsl/bin/eddy_openmp --imain=../ir-analysis/ir-diff-strides_dn_degibbs.nii --mask=../ir-analysis/bet_mask.nii.gz --init=../ir-analysis/only-b1000-ec-params.txt --niter=0 --acqp=$fsl_dir/eddy_config.txt --index=$index --bvecs=$bvecs_IRdiff_TIfast --bvals=$bvals_IRdiff_TIfast --topup=$fsl_dir/field --out=../ir-analysis/ir-diff-strides_dn_degibbs_post-eddy.nii\n";
+    `/data_/tardiflab/01_programs/fsl/bin/eddy_openmp --imain=../ir-analysis/ir-diff-strides_dn_degibbs.nii --mask=../ir-analysis/bet_mask.nii.gz --init=../ir-analysis/only-b1000-ec-params.txt --niter=0 --acqp=$fsl_dir/eddy_config.txt --index=$index --bvecs=$bvecs_IRdiff_TIfast --bvals=$bvals_IRdiff_TIfast --topup=$fsl_dir/field --out=../ir-analysis/ir-diff-strides_dn_degibbs_post-eddy.nii` unless -e "../ir-analysis/ir-diff-strides_dn_degibbs_post-eddy.nii.gz";
+
+    $irdiff_to_use = "../ir-analysis/ir-diff-strides_dn_degibbs_post-eddy.nii.gz";
+}
+else{ #not eddy and no topup
+    $irdiff_to_use = "../ir-analysis/ir-diff-strides_dn_degibbs.nii";
+}
+print "\n---------Check everything is lined up!-------\n";
+print "/usr/local/bin/fsleyes $irdiff_to_use afd_voxel_strides.nii* AMICO/NODDI/FIT_ICVF-strides.nii* noddi/brain_mask-swap-strides.nii* $meanb0\n";
+`/usr/local/bin/fsleyes $irdiff_to_use afd_voxel_strides.nii* AMICO/NODDI/FIT_ICVF-strides.nii* noddi/brain_mask-swap-strides.nii* $meanb0`;
+
+
 
 #print "---------Please enter the afd threshold (default=0.1)   : ";
 #$afd_thresh = <STDIN>;
 #chomp($afd_thresh);
 $afd_thresh=0.2;
-`mkdir fixel_dir-output` unless -e "fixel_dir-output";
+#`mkdir fixel_dir-output` unless -e "fixel_dir-output";
 
 # this is the old method using vic
-#print "fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR -TE $TE -fixel fixel_dir-output\n";
-#fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output`;
+#print "fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $roi -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR -TE $TE -fixel fixel_dir-output\n";
+#fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $roi -vic AMICO/NODDI/FIT_ICVF-strides.nii.gz -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output`;
 
 # this is the newer way using a fixed average tensor and fixed S0
-print "\n\nfibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -S0 $meanb0 -AD $dpar -RD $dperp -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR -TE $TE -fixel fixel_dir-output >fit-log\n";
-`fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -S0 $meanb0 -AD $dpar -RD $dperp -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output >fit-log`;
+#print "\n\nfibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $roi -S0 $meanb0 -AD $dpar -RD $dperp -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR -TE $TE -fixel fixel_dir-output >fit-log\n";
+#`fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $roi -S0 $meanb0 -AD $dpar -RD $dperp -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output >fit-log`;
 
+# this is the even newer way uthat addtionally first computes the T1 of the diffusion averaged signal (T1dw),
+# The T1dw is then used in the voxels where the fitting fails and for fibers below the threshold
+print "\n--Fit T1dw in the whole brain---\n";
+$outT1dw = "just-T1dw/";
+print "\nfibermyelin_pipeline.py -t1 $outT1dw/T1.nii -Dpar $outT1dw/Dpar.nii -mask $mask -AD $dpar -RD $dperp -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff $irdiff_to_use -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR -TE $TE -fixel $outT1dw -cost $outT1dw/cost.nii -S0_out $outT1dw/S0out.nii -just_T1dw > output-just-T1dw\n";
+`fibermyelin_pipeline.py -t1 $outT1dw/T1.nii -Dpar $outT1dw/Dpar.nii -mask $mask -AD $dpar -RD $dperp -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff $irdiff_to_use -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel $outT1dw -cost $outT1dw/cost.nii -S0_out $outT1dw/S0out.nii -just_T1dw > output-just-T1dw` unless -e "$outT1dw/T1.nii";
 
-# mrview V1.mif -fixel.load fixel_dir-output/t1_fixel.nii
+#now fit for real
+print "\n--Fit fiber-specific T1 in roi---\n";
+$outfit = "fixel_dir-output/";
+print "\nfibermyelin_pipeline.py -t1 $outfit/T1.nii -Dpar $outfit/Dpar.nii -mask $roi -AD $dpar -RD $dperp -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff $irdiff_to_use -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR -TE $TE -fixel $outfit -cost $outfit/cost.nii -S0_out $outfit/S0out.nii -T1dw $outT1dw/T1.nii> output-fit\n";
+`fibermyelin_pipeline.py -t1 $outfit/T1.nii -Dpar $outfit/Dpar.nii -mask $roi -AD $dpar -RD $dperp -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff $irdiff_to_use -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel $outfit -cost $outfit/cost.nii -S0_out $outfit/S0out.nii  -T1dw $outT1dw/T1.nii > output-fit` unless -e "$outfit/T1.nii";
+
+# mrview V1.mif -fixel.load $outfit/t1_fixel.nii
 
 ## Now generate a file with the sorted T1 by direction
 # right now it's hard-coded in fibermyelin_pipeline.py but it could be an input
-print "\n\nfibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask -S0 $meanb0 -AD $dpar -RD $dperp -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output -sort > t1sort.txt\n";
+print "\n\nfibermyelin_pipeline.py -t1 $outfit/T1.nii -Dpar $outfit/Dpar.nii -mask $mask -AD $dpar -RD $dperp -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff $irdiff_to_use -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel $outfit -sort > t1sort.txt\n";
 
-`fibermyelin_pipeline.py -t1 fixel_dir-output/T1.nii -Dpar fixel_dir-output/Dpar.nii -mask $mask  -S0 $meanb0 -AD $dpar -RD $dperp -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff ../ir-analysis/ir-diff-strides.nii -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel fixel_dir-output -sort > t1sort.txt`;
+`fibermyelin_pipeline.py -t1 $outfit/T1.nii -Dpar $outfit/Dpar.nii -mask $mask  -AD $dpar -RD $dperp -afd afd_voxel_strides.nii -afdthresh $afd_thresh -dirs directions_voxel_strides.nii -IRdiff $irdiff_to_use -TIs ../TIcomb.txt -bvals $bvals_ir -bvecs $bvecs_ir -TR $TR  -TE $TE -fixel $outfit -sort > t1sort.txt`;
 
 
 sub run_matlab {
