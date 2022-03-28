@@ -395,7 +395,7 @@ if not (myargs.visualize or myargs.sortT1):
             vic=0
 
         if myargs.viso_image_filename:
-            viso=viso_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j]]
+            viso=viso_img.get_data()[voxels[0][j],voxels[1][j],voxels[2][j]]    
             print('viso: %f' % viso)
         else:
             viso=0
@@ -475,7 +475,8 @@ if not (myargs.visualize or myargs.sortT1):
                 number_of_fibers = 1
                 T1s=np.zeros(number_of_fibers)
                 Dparfit=np.zeros(number_of_fibers)
-                #T1sandDparfit=np.zeros(number_of_fibers+1)
+            if(number_of_fibers_total==0): #this means there's really nothing there
+                T1sandDparfit=np.zeros(number_of_fibers+1)
 
         for i in range(0,number_of_fibers):
             if (T1sandDparfit is not None):
