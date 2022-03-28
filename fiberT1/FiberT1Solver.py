@@ -24,7 +24,7 @@ import random
 #hardcoded global vars:
 
 global plot_fit
-plot_fit=False
+plot_fit = False
 
 global just_b0
 just_b0 = False #have to set here and in calling script fibermyelin_pipeline.py, a
@@ -154,7 +154,7 @@ class FiberT1Solver:
     def GetT1s(self):
 
         # have to hack because we want to use the same code
-        if self.just_T1dw:
+        if (self.just_T1dw or just_b0):
             set_Dpar_equal = False
         else:
             set_Dpar_equal = True
@@ -365,7 +365,7 @@ class FiberT1Solver:
             # now that the observations are strung our properly, we are going to average the directional data (no b=0s) at each TI
             tmp_obs = np.copy(args[:,1])
             tmp_bvals = np.copy(args[:,0])
-            counter=0;
+            counter=0
             for i in range(0, self.number_of_TIs):
                 for j in range(0, self.number_of_diff_encodes):
                     # mean across all directions at each TI (no b=0s):
@@ -480,14 +480,16 @@ class FiberT1Solver:
                         args[i*self.number_of_diff_encodes+j,9+6*k]=0.0
                         args[i*self.number_of_diff_encodes+j,10+6*k]=0.0
 
-        # to weight b=0 more (instead of actually acquiring more), repeat N more times:
-        N=np.int(0.1*(self.number_of_diff_encodes-1))-1
-        newargs=np.zeros((self.number_of_TIs*self.number_of_diff_encodes+self.number_of_TIs*N,11+6*self.number_of_fibers_total))
-        for i in range(self.number_of_TIs*self.number_of_diff_encodes):
-            newargs[i,:]=args[i,:]
-        for j in range(self.number_of_TIs):
-            for i in range(N):
-                newargs[self.number_of_TIs*self.number_of_diff_encodes+j*N+i,:]=args[j*self.number_of_TIs,:]      #the b=0 for that TI
+        # we don't want to weight the b=0s more. They give a different T1
+         # to weight b=0 more (instead of actually acquiring more), repeat N more times:
+        #N=np.int(0.1*(self.number_of_diff_encodes-1))-1
+        #newargs=np.zeros((self.number_of_TIs*self.number_of_diff_encodes+self.number_of_TIs*N,11+6*self.number_of_fibers_total))
+        #for i in range(self.number_of_TIs*self.number_of_diff_encodes):
+        #    newargs[i,:]=args[i,:]
+        #for j in range(self.number_of_TIs):
+        #    for i in range(N):
+        #        newargs[self.number_of_TIs*self.number_of_diff_encodes+j*N+i,:]=args[j*self.number_of_TIs,:]      #the b=0 for that TI
+        newargs = args
 
         if simulate:#simulate data for these input fibers and AFDs:
             # NOTE this is just for Dpar eq case
@@ -529,7 +531,41 @@ class FiberT1Solver:
             res_lsq = least_squares(IRDiffEqnNoD, self.init_params, method='trf',
                                     bounds=tuple([self.lowerbounds, self.upperbounds]), args=newargs, jac='3-point',
                                     ftol=0.5E-7)
+        only_subset = False #use only a subset of TIs
+        if only_subset:
+            newargs[62:,:] = newargs[0:62,:]
+        signed = False
+        if signed:
+            # polarity ambiguity test
+            signed_args = np.copy(newargs)
+            # all points negative
+            signed_args[:, 1] = newargs[:, 1] * -1
+            res_lsq1 = least_squares(SignedIRDiffEqn, self.init_params, method='trf',
+                                    bounds=tuple([self.lowerbounds, self.upperbounds]), args=signed_args, jac='3-point',
+                                    ftol=0.5E-7)
+            print "cost1=%f" %res_lsq1.cost
+
+            tmp = np.ones([1, 124])
+            # last 2 points were +ve
+            tmp[:, 0:62] = -1
+            signed_args[:, 1] = newargs[:, 1] * tmp
+            res_lsq2 = least_squares(SignedIRDiffEqn, self.init_params, method='trf',
+                                    bounds=tuple([self.lowerbounds, self.upperbounds]), args=signed_args, jac='3-point',
+                                    ftol=0.5E-7)
+            print "cost2=%f" % res_lsq2.cost
+            # last was +ve
+            tmp = np.ones([1, 124])
+            tmp[:, 0:93] = -1
+            signed_args[:, 1] = newargs[:, 1] * tmp
+            res_lsq3 = least_squares(SignedIRDiffEqn, self.init_params, method='trf',
+                                    bounds=tuple([self.lowerbounds, self.upperbounds]), args=signed_args, jac='3-point',
+                                    ftol=0.5E-7)
+            print "cost3=%f" % res_lsq3.cost
+
+            res_lsq = res_lsq3
+
         else:
+
             #trf, more b0s, 3-point jacobian computation:
             res_lsq = least_squares(IRDiffEqn, self.init_params, method='trf', bounds=tuple([self.lowerbounds,self.upperbounds]),args=newargs, jac='3-point',ftol=0.5E-7)
 
@@ -583,14 +619,17 @@ class FiberT1Solver:
                 plotdata=np.zeros([self.number_of_TIs,4])
 
                 if (self.number_of_diff_encodes==31):
-                    thisDWI=[0, 21, 5, 30] #these are the index for b=0, and closest to be along z,y,x
+                    thisDWI=[0, 19, 4, 14] #these are the index for b=0, and closest to be along z,y,x
                 if (self.number_of_diff_encodes == 21):
                     thisDWI = [0, 18, 2, 1]
                 if (self.number_of_diff_encodes == 65):
                     thisDWI = [0, 59, 2, 1]
                 for i in range(self.number_of_TIs):
                     for j in range(4):
-                        plotdata[i,j]=newargs[i*self.number_of_diff_encodes+thisDWI[j],1]
+                        if signed:
+                            plotdata[i, j] = signed_args[i * self.number_of_diff_encodes + thisDWI[j], 1]
+                        else:
+                            plotdata[i,j]=newargs[i*self.number_of_diff_encodes+thisDWI[j],1]
                 ax.plot(self.TIs,plotdata[:,0], 'k--')
                 ax.plot(self.TIs,plotdata[:,1], 'b--')
                 ax.plot(self.TIs,plotdata[:,2], 'g--')
@@ -607,13 +646,21 @@ class FiberT1Solver:
                 plt.ylabel('Signal Intensity',fontsize=14)
 
                 #now set to predicted signal:
-                pred_sig_res=IRDiffEqn(res_lsq.x,newargs)
+                if signed:
+                    pred_sig_res = SignedIRDiffEqn(res_lsq.x, signed_args)
+                else:
+                    pred_sig_res = IRDiffEqn(res_lsq.x, newargs)
+
 
 
 
                 for i in range(self.number_of_TIs):
                     for j in range(4):
-                        plotdata[i,j]=newargs[i*self.number_of_diff_encodes+thisDWI[j],1]+pred_sig_res[i*self.number_of_diff_encodes+thisDWI[j]]
+                        if signed:
+                            plotdata[i, j] = signed_args[i * self.number_of_diff_encodes + thisDWI[j], 1] + pred_sig_res[
+                                i * self.number_of_diff_encodes + thisDWI[j]]
+                        else:
+                            plotdata[i,j]=newargs[i*self.number_of_diff_encodes+thisDWI[j],1]+pred_sig_res[i*self.number_of_diff_encodes+thisDWI[j]]
                 ax.plot(self.TIs,plotdata[:, 0], 'k-', linewidth=2, label='b=0')
                 ax.plot(self.TIs,plotdata[:,1], 'b-',linewidth=2, label='z-oriented')
                 ax.plot(self.TIs,plotdata[:,2], 'g-',linewidth=2, label='y-oriented')
@@ -952,16 +999,23 @@ def IRDiffEqn(params,*args):  # equation for residuals; params is vector of the 
             sig[h] = sqrt((params[numfibers+2]*eq[h])**2+params[numfibers+1]**2)
         elif (just_b0 or just_T1dw):
             sig[h] = sqrt((params[2]*eq[h])**2+params[1]**2)
+            #sig[h] = sqrt((params[2]*eq[h])**2)
+
         else:  #Dpar not equal, not implemented
             sig[h]=sqrt((params[2*numfibers+1]*eq[h])**2+params[2*numfibers]**2)
         out[h]=sig[h]-obs[h]
 
-    if (numfibers>1):
-        if set_noIE:
-            print("Dpar: %f; T1: %f %f; S0: %f; neta: %f;SOS residuals: %f" % (
-            params[2], params[0], params[1], params[4], params[3], np.sum(np.square(out))))
-        else:
-            print("Dpar: %f; T1: %f %f; S0: %f; neta: %f ;IE: %f ;SOS residuals: %f" % (params[2], params[0], params[1], params[4], params[3], params[5],np.sum(np.square(out))))
+    #verbose, don't want this for full brain...
+    if 0:
+        if (numfibers>1):
+            if set_noIE:
+                print("Dpar: %f; T1: %f %f; S0: %f; neta: %f;SOS residuals: %f" % (
+                    params[2], params[0], params[1], params[4], params[3], np.sum(np.square(out))))
+            else:
+                print("Dpar: %f; T1: %f %f; S0: %f; neta: %f ;IE: %f ;SOS residuals: %f" % (params[2], params[0], params[1], params[4], params[3], params[5],np.sum(np.square(out))))
+        elif (just_T1dw or just_b0):
+            print("T1: %f; S0: %f; neta: %f;SOS residuals: %f" % (
+                params[0], params[2],  params[1], np.sum(np.square(out))))
 
     return out # difference between calculated and observed signal at datapoint h
 
@@ -1136,199 +1190,221 @@ def SignedIRDiffEqn(params,*args): #equation for predicted signal; params is vec
     #copied from IRDiffEqn(params,*args) with the final section modified to output signed signal not magnitude residual
 
 
-    #notes:
-    #this always uses the steady state equation
-    #using vic assumes same tortuosity for all fibers.
-    #DO: should add a term to tortuosity computation that is a factor of T1 (params) to incorp myelin
+    # notes:
+    # this always uses the steady state equation
+    # using vic assumes same tortuosity for all fibers.
+    # DO: should add a term to tortuosity computation that is a factor of T1 (params) to incorp myelin
     # (although tortuousity model is wrong, period, so need DIAMOND or something else
 
+    global set_Dpar_equal
+    if len(np.shape(args)) != 2:
+        args = args[0][:][:]
 
-    if (len(np.shape(args)) != 2):
-        args=args[0][:][:]
+    number_of_obs = np.shape(args)[0]
 
+    # fixed params for CSF fraction:
+    CSF_T1 = 2900  # 2900 from Ilana's computation (agrees with Hutter);
+    CSF_D = 3.0E-3
 
+    # put args in reasonably named variables
+    # this takes longer but is more readable
+    # I'm having trouble extracting the right thing from args, so I'm doing a hack:
+    bvals = np.zeros(number_of_obs)
+    obs = np.zeros(number_of_obs)
+    TIs = np.zeros(number_of_obs)
 
-    number_of_obs=np.shape(args)[0]
-
-    #fixed params for CSF fraction:
-    CSF_T1=2900 #2900 from Ilana's computation (agrees with Hutter);
-    CSF_D=3.0E-3
-
-
-
-    #put args in reasonably named variables
-    #this takes longer but is more readable
-    #I'm having trouble extracting the right thing from args, so I'm doing a hack:
-    bvals=np.zeros(number_of_obs)
-    obs=np.zeros(number_of_obs)
-    TIs=np.zeros(number_of_obs)
-
-    temp_array=args[0]
-    TR=temp_array[2]#currently a constant; we don't have a sequence with a different but constant TR per slice. Need Bloch sim if it varies.
-    numfibers=int(temp_array[5]) #repeated constant
-    if (fix_vic):
-        vic=fixed_vic  #global variable
+    temp_array = args[0]
+    TR = temp_array[
+        2]  # currently a constant; we don't have a sequence with a different but constant TR per slice. Need Bloch sim if it varies.
+    T1dw = int(temp_array[3])  # repeated constant
+    numfibers = int(temp_array[5])  # repeated constant
+    numfibers_total = int(temp_array[6])
+    if fix_vic:
+        vic = fixed_vic  # global variable
+    # else: # we are no longer using vic
+    #    vic = temp_array[6] #repeated constant
+    viso = temp_array[13 + 6 * (numfibers_total - 1)]  # repeated constant
+    B1 = temp_array[14 + 6 * (numfibers_total - 1)]  # repeated constant
+    TE = temp_array[15 + 6 * (numfibers_total - 1)]
+    if temp_array[16 + 6 * (numfibers_total - 1)]:
+        just_T1dw = True
+        set_Dpar_equal = False
     else:
-        vic=temp_array[6] #repeated constant
-    viso=temp_array[13+6*(numfibers-1)] #repeated constant
-    B1=temp_array[14+6*(numfibers-1)] #repeated constant
-    TE=temp_array[15+6*(numfibers-1)]
+        just_T1dw = False
 
-    AFD=np.zeros(numfibers)
-    for j in range(0,numfibers):
-        AFD[j]=temp_array[7+6*j]
+    AFD = np.zeros(numfibers_total)
+    for j in range(0, numfibers_total):
+        AFD[j] = temp_array[7 + 6 * j]
 
-    gnewx=np.zeros([number_of_obs,numfibers])
-    gnewy=np.zeros([number_of_obs,numfibers])
-    gnewz=np.zeros([number_of_obs,numfibers])
+    gnewx = np.zeros([number_of_obs, numfibers_total])
+    gnewy = np.zeros([number_of_obs, numfibers_total])
+    gnewz = np.zeros([number_of_obs, numfibers_total])
 
+    for i in range(0, number_of_obs):
+        temp_array = args[i]
+        bvals[i] = temp_array[0]
+        obs[i] = temp_array[1]
+        TIs[i] = temp_array[4]
+        for j in range(0, numfibers):
+            gnewx[i, j] = temp_array[8 + 6 * j]
+            gnewy[i, j] = temp_array[9 + 6 * j]
+            gnewz[i, j] = temp_array[10 + 6 * j]
 
-    for i in range(0,number_of_obs):
-        temp_array=args[i]
-        bvals[i]=temp_array[0]
-        obs[i]=temp_array[1]
-        TIs[i]=temp_array[4]
-        for j in range(0,numfibers):
-            gnewx[i,j]=temp_array[8+6*j]
-            gnewy[i,j]=temp_array[9+6*j]
-            gnewz[i,j]=temp_array[10+6*j]
+    eq = np.zeros(number_of_obs)
+    sig = np.zeros(number_of_obs)
+    out = np.zeros(number_of_obs)
 
+    # normalize the AFD:
+    norm_AFD = np.zeros(numfibers_total)
+    sum_AFD = np.sum(AFD)
+    for i in range(0, numfibers_total):
+        norm_AFD[i] = AFD[i] / sum_AFD
 
+    for h in range(0, number_of_obs):
+        if (not just_b0) and (not just_T1dw):
+            for i in range(0, numfibers_total):
+                term1 = norm_AFD[i]
 
+                if set_Dpar_equal:
+                    # params[i] is T1 for fiber i
+                    # inversion efficiency IE is params[numfibers+3]
+                    if i < numfibers:  # above threshold
+                        T1_current = params[i]
+                    else:  # below threshold fiber, set to average T1 of diff data (T1dw)
+                        T1_current = T1dw
 
-    eq=np.zeros(number_of_obs)
-    sig=np.zeros(number_of_obs)
-    out=np.zeros(number_of_obs)
-
-    #normalize the AFD:
-
-    norm_AFD=np.zeros(numfibers)
-    sum_AFD=np.sum(AFD)
-    for i in range(0,numfibers):
-        norm_AFD[i]=AFD[i]/sum_AFD
-
-
-    for h in range(0,number_of_obs):
-        if (not just_b0):
-            for i in range(0,numfibers):
-                term1=norm_AFD[i]
-
-                if (set_Dpar_equal):
-                    #params[i] is T1 for fiber i
-                    #inversion efficiency IE is params[numfibers+3]
-
-                    if (not set_noIE):
-                        term2=SteadyStateT1Recov(params[numfibers+3], B1, TIs[h], TR, TE, params[i])
+                    if (not set_noIE):  # at the start of the fitting process, params contains the init_params?
+                        term2 = SteadyStateT1Recov(params[numfibers + 3], B1, TIs[h], TR, TE,
+                                                   T1_current)  # function of params[numfibers+3]==IE, B1, TIs, TR, TE, params[i]==(T1 of fiber i)
                     else:
-                        term2=SteadyStateT1RecovnoIE(B1, TIs[h], TR, TE, params[i])
+                        term2 = SteadyStateT1RecovnoIE(B1, TIs[h], TR, TE, T1_current)
 
-                    #GE ver:
-                    #term2=1-2*params[numfibers+3]*np.exp(-1.0*TIs[h]/params[i])+np.exp(-1.0*TR/params[i])
+                    # GE ver:
+                    # term2=1-2*params[numfibers+3]*np.exp(-1.0*TIs[h]/params[i])+np.exp(-1.0*TR/params[i])
 
+                # else:  #not set_Dpar_equal not implemented right  now
+                # params[2*i] is T1 for fiber i
 
+                # GE ver:
+                # term2=1-2*np.exp(-1.0*TIs[h]/params[2*i])+np.exp(-1.0*TR/params[2*i])
 
-                #else:  #not set_Dpar_equal not implemented right  now
-                #params[2*i] is T1 for fiber i
+                if (fix_D_phantom3):
+                    Dpar = args[h, 11 + 6 * i]
+                    Dperp = args[h, 12 + 6 * i]
+                elif (avg_tensor):
+                    Dpar = temp_array[11 + 6 * i]
+                    Dperp = temp_array[12 + 6 * i]
+                elif fix_tensor:  # only makes sense when the 2 tensors are equal
+                    Dpar = args[h][11 + 6 * i]
+                    Dperp = args[h][12 + 6 * i]
 
-
-
-                    #GE ver:
-                    #term2=1-2*np.exp(-1.0*TIs[h]/params[2*i])+np.exp(-1.0*TR/params[2*i])
-
-
-
-                if (fix_D_phantom3 | sim_input_tensor): #we want to use fixed values for the tensor
-                    Dpar=args[h] [11+6*i]
-                    Dperp=args[h][12+6*i]
-
-
-                else: #(not fix_D_phantom3), i.e., everything else:
-
-
+                else:  # (not fix_D_phantom3), i.e., everything else:
                     if (set_Dpar_equal):
-                        Dpar=params[numfibers]
-                    else:  #not implemented right now
-                    #params[2*i+1] is Dpar
-                        Dpar=params[2*i+1]
+                        Dpar = params[numfibers]
+                    else:  # not implemented right now
+                        # params[2*i+1] is Dpar
+                        Dpar = params[2 * i + 1]
 
+                    # this is the low-density mean-field tortuosity approximation, and is probably incorrect for realistically tight axonal packing
+                    # hardcoded for b=1000; HERE change if b is not 1000!
+                    Dperp = -np.log((1 - vic) * np.exp(-(1 - vic) * Dpar * 1000) + vic) / 1000
 
+                D = np.zeros([3, 3])
 
+                # D in coord system of fiber dir and orth vectors (f,v_orth1,v_orth2)
+                D = np.array([[Dpar, 0, 0], [0, Dperp, 0], [0, 0, Dperp]])
 
+                # g in coordinate system of fiber i:
+                gnew = [gnewx[h, i], gnewy[h, i], gnewz[h, i]]
 
-                    #this is the low-density mean-field tortuosity approximation, and is probably incorrect for realistically tight axonal packing
-                    #hardcoded for b=1000; HERE change if b is not 1000!
-                    Dperp=-np.log((1-vic)*np.exp(-(1-vic)*Dpar*1000)+vic)/1000
+                # DO as numpy matrix dot product  (note not matrix mult)
+                Dterm = 0.0
+                for j in range(0, 3):
+                    for k in range(0, 3):
+                        Dterm += D[j, k] * gnew[j] * gnew[k]
 
+                # print("Dterm %f" % Dterm)
+                # print("Dpar %f Dperp %f" % (Dpar,Dperp))
 
+                term3 = np.exp(-bvals[h] * Dterm)  # diffusion term for the IR-DWI signal equation
 
-                D=np.zeros([3,3])
+                # print("term1 %f term2 %f term3 %f" % (term1, term2, term3))
 
+                # eq[h]+=term1*term2*term3 # taken care of in the block below
 
+                # added December 10, 2019
+                if all(i <= true_afd_thresh for i in
+                       AFD):  # eq[h]+= means a new term is added for each fiber in the voxel... don't want this in voxels with all subthresh fibers so set eq[h] = term2, where term2 is the same for each fiber
+                    eq[
+                        h] = term2  # if all fibers are sub-afd-threshold, use the just_b0 / SE-IR term only for this voxel's signal equation (no afd or diffusion terms), using the T1 of the last fiber in the voxel
+                elif (not all(i <= true_afd_thresh for i in AFD)):
+                    eq[
+                        h] += term1 * term2 * term3  # if there is at least one superthreshold fiber in the voxel, include the diffusion terms for this voxel's signal equation
+            # NOTES on the above block
+            # In voxels with only subthreshold fibers, eq[h] is set to term2 for the final fiber in the voxel
+            # Result of this - T1s are not calculated for the other fibers in the voxel
+            # Solution - calculate T1 using the SE-IR signal equation for the last fiber in the voxel, then replace the initialized T1 times of the other fibers with the calculated T1 of the final fiber (done in fibermyelin_pipeline.py ~line 463)
 
-                #D in coord system of fiber dir and orth vectors (f,v_orth1,v_orth2)
-                D=np.array([[Dpar, 0, 0],[0, Dperp, 0],[0, 0, Dperp]])
+            # Add the viso and CSF terms to the signal equation if there is at least one superthreshold fiber in the voxel, otherwise use the SE-IR equation only
+            if (all(i <= true_afd_thresh for i in AFD) and (not set_noIE)):
+                eq[h] = eq[h]  # Leave the equation as-is (i.e. SE-IR) for voxels with only subthreshold fibers
+            elif ((not all(i <= true_afd_thresh for i in AFD)) and (
+            not set_noIE)):  # if there are any supperthreshold fibers in
+                eq[h] = (1 - viso) * eq[h] + viso * (
+                            np.exp(-bvals[h] * CSF_D) * SteadyStateT1Recov(params[numfibers + 3], B1, TIs[h], TR, TE,
+                                                                           CSF_T1))
+            elif (set_noIE):  # no IE equation
+                eq[h] = (1 - viso) * eq[h] + viso * (
+                            np.exp(-bvals[h] * CSF_D) * SteadyStateT1RecovnoIE(B1, TIs[h], TR, TE, CSF_T1))
+    # added December 10, 2019
 
+    # original / before Dec. 10, 2019, replaced by the above block
+    #            #now add CSF term:
+    #            if (not set_noIE):
+    #                eq[h]=(1-viso)*eq[h]+viso*(np.exp(-bvals[h]*CSF_D)*SteadyStateT1Recov(params[numfibers+3], B1, TIs[h], TR, TE, CSF_T1))
+    #            else:
+    #                eq[h] = (1 - viso) * eq[h] + viso * (np.exp(-bvals[h] * CSF_D) * SteadyStateT1RecovnoIE(B1, TIs[h], TR, TE, CSF_T1))
+    # original / before Dec. 10, 2019
 
-
-
-                #g in coordinate system of fiber i:
-
-                gnew=[gnewx[h,i], gnewy[h,i], gnewz[h,i]]
-
-                #DO as numpy matrix dot product  (note not matrix mult)
-                Dterm=0.0
-                for j in range(0,3):
-                    for k in range (0,3):
-                        Dterm+=D[j,k]*gnew[j]*gnew[k]
-
-                #print("Dterm %f" % Dterm)
-
-                term3=np.exp(-bvals[h]*Dterm)
-
-
-
-                #print("term1 %f term2 %f term3 %f" % (term1, term2, term3))
-
-                eq[h]+=term1*term2*term3
-
-            #now add CSF term:
-            if (not set_noIE):
-                eq[h]=(1-viso)*eq[h]+viso*(np.exp(-bvals[h]*CSF_D)*SteadyStateT1Recov(params[numfibers+3], B1, TIs[h], TR, TE, CSF_T1))
+        else:  # just_b0 or just_T1dw -- this does not add a term for each fiber since fibers are not counted
+            if not set_noIE:
+                term2 = SteadyStateT1Recov(params[3], B1, TIs[h], TR, TE, params[0])
             else:
-                eq[h]=(1-viso)*eq[h]+viso*(np.exp(-bvals[h]*CSF_D)*SteadyStateT1RecovnoIE(B1, TIs[h], TR, TE, CSF_T1))
+                term2 = SteadyStateT1RecovnoIE(B1, TIs[h], TR, TE, params[0])
 
+            # GE ver
+            # term2=1-2*np.exp(-1.0*TIs[h]/params[0])+np.exp(-1.0*TR/params[0])
 
+            eq[h] += term2  # for just b0, outside the fiber loop so there is only one term2 per voxel
 
-        else: #just_b0
-
-            term2=SteadyStateT1Recov(params[3], B1, TIs[h], TR, TE, params[0])
-
-            #GE ver
-            #term2=1-2*np.exp(-1.0*TIs[h]/params[0])+np.exp(-1.0*TR/params[0])
-
-            eq[h]+=term2
-
-
-
-
-        #take magnitude, mult by S0, and add Johnson noise term neta:
-        #params[2*numfibers+1] is S0
-        #params[2*numfibers] is noise term neta, currently added for ALL images
-
+            # take magnitude, mult by S0, and add Johnson noise term neta:
+            # params[2*numfibers+1] is S0
+            # params[2*numfibers] is noise term neta, currently added for ALL images
 
         if (set_Dpar_equal):
-            sig[h]=params[numfibers+2]*eq[h]
-        elif (just_b0):
-            sig[h]=params[2]*eq[h]
-        #else:  #Dpar not equal, not implemented
-
-        out[h]=sig[h]
-
-    #if (numfibers>1):
-        #print("Dpar: %f %f; T1: %f %f; SOS residuals: %f" % (params[1], params[3], params[0], params[2], np.sum(np.square(out))))
+            sig[h] = params[numfibers + 2] * eq[h] + params[numfibers + 1]
+        elif (just_b0 or just_T1dw):
+            #sig[h] = params[2] * eq[h] + params[1]
+            sig[h] = params[2] * eq[h]
+        else:  # Dpar not equal, not implemented
+            sig[h] = params[2 * numfibers + 1] * eq[h] + params[2 * numfibers]
+        out[h] = sig[h] - obs[h]
 
 
-    return out
+    if (numfibers > 1):
+        if set_noIE:
+            print("Dpar: %f; T1: %f %f; S0: %f; neta: %f;SOS residuals: %f" % (
+                params[2], params[0], params[1], params[4], params[3], np.sum(np.square(out))))
+        else:
+            print("Dpar: %f; T1: %f %f; S0: %f; neta: %f ;IE: %f ;SOS residuals: %f" % (
+            params[2], params[0], params[1], params[4], params[3], params[5], np.sum(np.square(out))))
+    elif (just_T1dw or just_b0):
+            print("T1: %f; S0: %f; neta: %f;SOS residuals: %f" % (
+            params[0], params[2], params[1], np.sum(np.square(out))))
+
+
+    return out  # difference between calculated and observed signal at datapoint h
+
 
 def SteadyStateT1Recov(IE, B1, TI, TR, TE, T1):
     #RF pulses
@@ -1352,13 +1428,14 @@ def SteadyStateT1RecovnoIE(B1, TI, TR, TE, T1):
     theta2=B1*pi/2
     theta3=B1*pi
 
+    ## check the equations, set to contant FAs and B1
+    #term1 = 1 - np.exp(-TR / T1)
+    #term2 = 2 * (np.exp(-(TR - TE / 2) / T1) - np.exp(-TI / T1))
+    #term3 = term1 + term2
 
     term1=(1-cos(theta1)*cos(theta3)*np.exp(-TR/T1)-cos(theta1)*(1-cos(theta3))*np.exp(-(TR-TE/2)/T1))/(1-cos(theta1)*cos(theta2)*cos(theta3)*np.exp(-TR/T1))
-
     term2=-1.0*(1-cos(theta1))/(1-cos(theta1)*cos(theta2)*cos(theta3)*np.exp(-TR/T1))
-
     term3=term1+term2*np.exp(-TI/T1)
-
 
     return term3
 
