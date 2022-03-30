@@ -1388,8 +1388,8 @@ def SignedIRDiffEqn(params,*args): #equation for predicted signal; params is vec
             sig[h] = params[2] * eq[h]
         else:  # Dpar not equal, not implemented
             sig[h] = params[2 * numfibers + 1] * eq[h] + params[2 * numfibers]
-        out[h] = sig[h] - obs[h]
-
+        #out[h] = sig[h] - obs[h] #use this when testing signed data
+        out[h] = sig[h] #use this for simulations
 
     if (numfibers > 1):
         if set_noIE:
@@ -1403,7 +1403,7 @@ def SignedIRDiffEqn(params,*args): #equation for predicted signal; params is vec
             params[0], params[2], params[1], np.sum(np.square(out))))
 
 
-    return out  # difference between calculated and observed signal at datapoint h
+    return out  # calculated signal at datapoint h
 
 
 def SteadyStateT1Recov(IE, B1, TI, TR, TE, T1):
